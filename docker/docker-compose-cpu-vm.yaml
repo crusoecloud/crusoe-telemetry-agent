@@ -1,0 +1,18 @@
+services:
+  vector:
+    image: timberio/vector:0.46.1-debian
+    container_name: vector
+    hostname: vector
+    ports:
+      - "8686:8686"
+    volumes:
+      - /etc/crusoe/beacon/vector.yaml:/etc/vector/vector.yaml:ro
+    environment:
+      BEACON_AUTH_TOKEN: BEACON_TOKEN_PLACEHOLDER
+      VM_ID: VM_ID_PLACEHOLDER
+    privileged: true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: "1g"

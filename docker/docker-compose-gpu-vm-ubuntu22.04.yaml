@@ -1,0 +1,50 @@
+services:
+  dcgm-exporter:
+    image: nvidia/dcgm-exporter:4.1.1-4.0.4-ubuntu22.04
+    container_name: dcgm-exporter
+    hostname: dcgm-exporter
+    cap_add: [SYS_ADMIN]
+    volumes:
+      - /etc/crusoe/beacon/dcp-metrics-included.csv:/etc/dcgm-exporter/dcp-metrics-included.csv:ro
+    command: -f /etc/dcgm-exporter/dcp-metrics-included.csv
+    ports:
+      - "9400:9400"
+    privileged: true
+    networks:
+      - metrics-network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: "1g"
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+
+  vector:
+    image: timberio/vector:0.46.1-debian
+    container_name: vector
+    hostname: vector
+    ports:
+      - "8686:8686"
+    volumes:
+      - /etc/crusoe/beacon/vector.yaml:/etc/vector/vector.yaml:ro
+    environment:
+      BEACON_AUTH_TOKEN: BEACON_TOKEN_PLACEHOLDER
+      VM_ID: VM_ID_PLACEHOLDER
+    depends_on:
+      - dcgm-exporter
+    privileged: true
+    networks:
+      - metrics-network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: "1g"
+
+networks:
+  metrics-network:
+    driver: bridge
