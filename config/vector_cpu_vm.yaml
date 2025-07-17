@@ -1,0 +1,37 @@
+sources:
+    basic_metrics:
+        type: host_metrics
+        collectors:
+            - cpu
+            - disk
+            - memory
+            - network
+        scrape_interval_secs: 60
+
+transforms:
+    add_vm_id:
+        type: remap
+        inputs:
+            - basic_metrics
+        source: |
+            .tags.vm_id = "${VM_ID}"
+
+sinks:
+    cms_gateway:
+        type: prometheus_remote_write
+        inputs:
+            - add_vm_id_label
+        endpoint: "https://cms-monitoring.crusoecloud.xyz/ingest"
+        auth:
+            strategy: bearer
+            token: "${BEACON_AUTH_TOKEN}"
+        healthcheck:
+            enabled: false
+        request:
+            concurrency: none
+            rate_limit_duration_secs: 60
+            rate_limit_num: 1
+        compression: snappy
+        tls:
+            verify_certificate: true
+            verify_hostname: true
