@@ -9,7 +9,7 @@ sources:
         scrape_interval_secs: 60
 
 transforms:
-    add_vm_id:
+    add_vm_id_label:
         type: remap
         inputs:
             - basic_metrics
@@ -21,7 +21,7 @@ sinks:
         type: prometheus_remote_write
         inputs:
             - add_vm_id_label
-        endpoint: "https://cms-monitoring.crusoecloud.xyz/ingest"
+        endpoint: "https://cms-monitoring.crusoecloud.com/ingest"
         auth:
             strategy: bearer
             token: "${BEACON_AUTH_TOKEN}"
