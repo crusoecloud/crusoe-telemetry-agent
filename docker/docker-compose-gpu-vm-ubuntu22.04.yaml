@@ -1,8 +1,8 @@
 services:
-  dcgm-exporter:
+  crusoe-dcgm-exporter:
     image: nvidia/dcgm-exporter:4.1.1-4.0.4-ubuntu22.04
-    container_name: dcgm-exporter
-    hostname: dcgm-exporter
+    container_name: crusoe-dcgm-exporter
+    hostname: crusoe-dcgm-exporter
     cap_add: [SYS_ADMIN]
     volumes:
       - /etc/crusoe/beacon/dcp-metrics-included.csv:/etc/dcgm-exporter/dcp-metrics-included.csv:ro
@@ -11,40 +11,41 @@ services:
       - "9400:9400"
     privileged: true
     networks:
-      - metrics-network
+      - crusoe-metrics-network
     deploy:
       resources:
         limits:
-          cpus: "0.25"
-          memory: "1g"
+          cpus: "0.5"
+          memory: "2g"
         reservations:
           devices:
             - driver: nvidia
               count: all
               capabilities: [ gpu ]
 
-  vector:
+  crusoe-vector:
     image: timberio/vector:0.46.1-debian
-    container_name: vector
-    hostname: vector
+    container_name: crusoe-vector
+    hostname: crusoe-vector
     ports:
       - "8686:8686"
     volumes:
       - /etc/crusoe/beacon/vector.yaml:/etc/vector/vector.yaml:ro
-    environment:
-      BEACON_AUTH_TOKEN: BEACON_TOKEN_PLACEHOLDER
-      VM_ID: VM_ID_PLACEHOLDER
+    env_file:
+      - ./.env
     depends_on:
-      - dcgm-exporter
+      - crusoe-dcgm-exporter
     privileged: true
     networks:
-      - metrics-network
+      - crusoe-metrics-network
     deploy:
       resources:
         limits:
           cpus: "0.25"
           memory: "1g"
+    # Delay start of vector to wait for dcgm-exporter container to start
+    entrypoint: /bin/sh -c "sleep 5 && /usr/bin/vector --config /etc/vector/vector.yaml"
 
 networks:
-  metrics-network:
+  crusoe-metrics-network:
     driver: bridge

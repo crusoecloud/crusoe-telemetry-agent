@@ -2,7 +2,7 @@ sources:
     dcgm_metrics:
         type: prometheus_scrape
         endpoints:
-            - http://dcgm-exporter:9400/metrics
+            - http://crusoe-dcgm-exporter:9400/metrics
         scrape_interval_secs: 60
 
 transforms:
@@ -18,7 +18,7 @@ sinks:
         type: prometheus_remote_write
         inputs:
             - add_vm_id_label
-        endpoint: "https://cms-monitoring.crusoecloud.xyz/ingest"
+        endpoint: "https://cms-monitoring.crusoecloud.com/ingest"
         auth:
             strategy: bearer
             token: "${BEACON_AUTH_TOKEN}"
