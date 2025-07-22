@@ -11,6 +11,7 @@ transforms:
         inputs:
             - dcgm_metrics
         source: |
+            del(.tags.Hostname)
             .tags.vm_id = "${VM_ID}"
 
 sinks:
