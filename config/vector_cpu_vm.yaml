@@ -24,7 +24,7 @@ sinks:
         endpoint: "https://cms-monitoring.crusoecloud.com/ingest"
         auth:
             strategy: bearer
-            token: "${BEACON_AUTH_TOKEN}"
+            token: "${CRUSOE_AUTH_TOKEN}"
         healthcheck:
             enabled: false
         request:

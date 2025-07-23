@@ -5,7 +5,7 @@ UBUNTU_OS_VERSION=$(lsb_release -r -s)
 CRUSOE_VM_ID=$(dmidecode -s system-uuid)
 
 # GitHub raw content base URL
-GITHUB_RAW_BASE_URL="https://raw.githubusercontent.com/crusoecloud/beacon/main"
+GITHUB_RAW_BASE_URL="https://raw.githubusercontent.com/crusoecloud/crusoe-telemetry-agent/main"
 
 # Define paths for config files within the GitHub repository
 REMOTE_VECTOR_CONFIG_GPU_VM="config/vector_gpu_vm.yaml"
@@ -13,11 +13,11 @@ REMOTE_VECTOR_CONFIG_CPU_VM="config/vector_cpu_vm.yaml"
 REMOTE_DCGM_EXPORTER_METRICS_CONFIG="config/dcp-metrics-included.csv"
 REMOTE_DOCKER_COMPOSE_GPU_VM_UBUNTU_22="docker/docker-compose-gpu-vm-ubuntu22.04.yaml"
 REMOTE_DOCKER_COMPOSE_CPU_VM="docker/docker-compose-cpu-vm.yaml"
-REMOTE_CRUSOE_BEACON_SERVICE="systemctl/crusoe-beacon.service"
+REMOTE_CRUSOE_TELEMETRY_SERVICE="systemctl/crusoe-telemetry-agent.service"
 SYSTEMCTL_DIR="/etc/systemd/system"
-CRUSOE_BEACON_DIR="/etc/crusoe/beacon"
-BEACON_TOKEN_LENGTH=82
-ENV_FILE="$CRUSOE_BEACON_DIR/.env" # Define the .env file path
+CRUSOE_TELEMETRY_AGENT_DIR="/etc/crusoe/telemetry_agent"
+CRUSOE_AUTH_TOKEN_LENGTH=82
+ENV_FILE="$CRUSOE_TELEMETRY_AGENT_DIR/.env" # Define the .env file path
 
 # --- Helper Functions ---
 
@@ -78,9 +78,9 @@ if ! command_exists wget; then
   apt-get update && apt-get install -y wget || error_exit "Failed to install wget."
 fi
 
-status "Create Beacon target directory."
-if ! dir_exists "$CRUSOE_BEACON_DIR"; then
-  mkdir -p "$CRUSOE_BEACON_DIR"
+status "Create telemetry agent target directory."
+if ! dir_exists "$CRUSOE_TELEMETRY_AGENT_DIR"; then
+  mkdir -p "$CRUSOE_TELEMETRY_AGENT_DIR"
 fi
 
 # Download required config files
@@ -96,13 +96,13 @@ if lspci | grep -q "NVIDIA Corporation"; then
   check_os_support
 
   status "Download DCGM exporter metrics config."
-  wget -q -O "$CRUSOE_BEACON_DIR/dcp-metrics-included.csv" "$GITHUB_RAW_BASE_URL/$REMOTE_DCGM_EXPORTER_METRICS_CONFIG" || error_exit "Failed to download $REMOTE_DCGM_EXPORTER_METRICS_CONFIG"
+  wget -q -O "$CRUSOE_TELEMETRY_AGENT_DIR/dcp-metrics-included.csv" "$GITHUB_RAW_BASE_URL/$REMOTE_DCGM_EXPORTER_METRICS_CONFIG" || error_exit "Failed to download $REMOTE_DCGM_EXPORTER_METRICS_CONFIG"
 
   status "Download GPU Vector config."
-  wget -q -O "$CRUSOE_BEACON_DIR/vector.yaml" "$GITHUB_RAW_BASE_URL/$REMOTE_VECTOR_CONFIG_GPU_VM" || error_exit "Failed to download $REMOTE_VECTOR_CONFIG_GPU_VM"
+  wget -q -O "$CRUSOE_TELEMETRY_AGENT_DIR/vector.yaml" "$GITHUB_RAW_BASE_URL/$REMOTE_VECTOR_CONFIG_GPU_VM" || error_exit "Failed to download $REMOTE_VECTOR_CONFIG_GPU_VM"
 
   status "Download GPU docker-compose file."
-  wget -q -O "$CRUSOE_BEACON_DIR/docker-compose.yaml" "$GITHUB_RAW_BASE_URL/$REMOTE_DOCKER_COMPOSE_GPU_VM_UBUNTU_22" || error_exit "Failed to download $REMOTE_DOCKER_COMPOSE_GPU_VM_UBUNTU_22"
+  wget -q -O "$CRUSOE_TELEMETRY_AGENT_DIR/docker-compose.yaml" "$GITHUB_RAW_BASE_URL/$REMOTE_DOCKER_COMPOSE_GPU_VM_UBUNTU_22" || error_exit "Failed to download $REMOTE_DOCKER_COMPOSE_GPU_VM_UBUNTU_22"
 
 # if VM has no NVIDIA GPUs
 else
@@ -111,43 +111,43 @@ else
   # wget commands for CPU configs would be active.
   error_exit "Non-GPU VMs are currently not supported."
   # status "Copy CPU Vector config."
-  # wget -q -O "$CRUSOE_BEACON_DIR/vector.yaml" "$GITHUB_RAW_BASE_URL/$REMOTE_VECTOR_CONFIG_CPU_VM" || error_exit "Failed to download $REMOTE_VECTOR_CONFIG_CPU_VM"
+  # wget -q -O "$CRUSOE_TELEMETRY_AGENT_DIR/vector.yaml" "$GITHUB_RAW_BASE_URL/$REMOTE_VECTOR_CONFIG_CPU_VM" || error_exit "Failed to download $REMOTE_VECTOR_CONFIG_CPU_VM"
 
   # status "Copy CPU docker-compose file."
-  # wget -q -O "$CRUSOE_BEACON_DIR/docker-compose.yaml" "$GITHUB_RAW_BASE_URL/$REMOTE_DOCKER_COMPOSE_CPU_VM" || error_exit "Failed to download $REMOTE_DOCKER_COMPOSE_CPU_VM"
+  # wget -q -O "$CRUSOE_TELEMETRY_AGENT_DIR/docker-compose.yaml" "$GITHUB_RAW_BASE_URL/$REMOTE_DOCKER_COMPOSE_CPU_VM" || error_exit "Failed to download $REMOTE_DOCKER_COMPOSE_CPU_VM"
 fi
 
-status "Fetching Beacon auth token."
-if [[ -z "$BEACON_TOKEN" ]]; then
+status "Fetching crusoe auth token."
+if [[ -z "$CRUSOE_AUTH_TOKEN" ]]; then
   echo "Command: crusoe monitoring tokens create"
   echo "Please enter the crusoe monitoring token:"
-  read -s BEACON_TOKEN # -s for silent input (no echo)
+  read -s CRUSOE_AUTH_TOKEN # -s for silent input (no echo)
   echo "" # Add a newline after the silent input for better readability
 
-  if [ "${#BEACON_TOKEN}" -ne $BEACON_TOKEN_LENGTH ]; then
-    echo "BEACON_TOKEN should be $BEACON_TOKEN_LENGTH characters long."
+  if [ "${#CRUSOE_AUTH_TOKEN}" -ne $CRUSOE_AUTH_TOKEN_LENGTH ]; then
+    echo "CRUSOE_AUTH_TOKEN should be $CRUSOE_AUTH_TOKEN_LENGTH characters long."
     echo "Use Crusoe CLI to generate a new token:"
     echo "Command: crusoe monitoring tokens create"
-    error_exit "BEACON_TOKEN is invalid. "
+    error_exit "CRUSOE_AUTH_TOKEN is invalid. "
   fi
 fi
 
-status "Creating .env file with BEACON_AUTH_TOKEN and VM_ID."
+status "Creating .env file with CRUSOE_AUTH_TOKEN and VM_ID."
 cat <<EOF > "$ENV_FILE"
-BEACON_AUTH_TOKEN='${BEACON_TOKEN}'
+CRUSOE_AUTH_TOKEN='${CRUSOE_AUTH_TOKEN}'
 VM_ID='${CRUSOE_VM_ID}'
 EOF
 echo ".env file created at $ENV_FILE"
 
-status "Download crusoe-beacon.service."
-wget -q -O "$SYSTEMCTL_DIR/crusoe-beacon.service" "$GITHUB_RAW_BASE_URL/$REMOTE_CRUSOE_BEACON_SERVICE" || error_exit "Failed to download $REMOTE_CRUSOE_BEACON_SERVICE"
+status "Download crusoe-telemetry-agent.service."
+wget -q -O "$SYSTEMCTL_DIR/crusoe-telemetry-agent.service" "$GITHUB_RAW_BASE_URL/$REMOTE_CRUSOE_TELEMETRY_SERVICE" || error_exit "Failed to download $REMOTE_CRUSOE_TELEMETRY_SERVICE"
 
-status "Enable systemctl service for crusoe-beacon."
+status "Enable systemctl service for crusoe-telemetry-agent."
 echo "systemctl daemon-reload"
 systemctl daemon-reload
-echo "systemctl enable crusoe-beacon.service"
-systemctl enable crusoe-beacon.service
+echo "systemctl enable crusoe-telemetry-agent.service"
+systemctl enable crusoe-telemetry-agent.service
 
 status "Setup Complete!"
-echo "Run: 'systemctl start crusoe-beacon.service' to push metrics to Crusoe."
-echo "Setup script finished successfully!"
+echo "Run: 'sudo systemctl start crusoe-telemetry-agent' to start monitoring metrics."
+echo "Setup finished successfully!"

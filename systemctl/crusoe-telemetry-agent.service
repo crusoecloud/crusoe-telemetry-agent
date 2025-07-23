@@ -1,0 +1,14 @@
+[Unit]
+Description=Crusoe Telemetry Agent: vector.dev based telemetry agent for crusoe resources
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+TimeoutStartSec=0
+Restart=always
+ExecStart=/usr/bin/docker compose -f /etc/crusoe/telemetry_agent/docker-compose.yaml up
+ExecStop=/usr/bin/docker compose -f /etc/crusoe/telemetry_agent/docker-compose.yaml down
+
+[Install]
+WantedBy=multi-user.target

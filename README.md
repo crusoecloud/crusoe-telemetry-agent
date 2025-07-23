@@ -1,2 +1,2 @@
-# beacon
-Crusoe beacon is a vector based telemetry agent for Crusoe cloud resources.
+# Crusoe Telemetry Agent
+Crusoe telemetry agent is a vector.dev based agent for collecting telemetry data from Crusoe cloud resources.
