@@ -18,6 +18,7 @@ SYSTEMCTL_DIR="/etc/systemd/system"
 CRUSOE_TELEMETRY_AGENT_DIR="/etc/crusoe/telemetry_agent"
 CRUSOE_AUTH_TOKEN_LENGTH=82
 ENV_FILE="$CRUSOE_TELEMETRY_AGENT_DIR/.env" # Define the .env file path
+CRUSOE_AUTH_TOKEN_REFRESH_ALIAS_PATH="/usr/bin/crusoe_auth_token_refresh"
 
 # --- Helper Functions ---
 
@@ -141,6 +142,12 @@ echo ".env file created at $ENV_FILE"
 
 status "Download crusoe-telemetry-agent.service."
 wget -q -O "$SYSTEMCTL_DIR/crusoe-telemetry-agent.service" "$GITHUB_RAW_BASE_URL/$REMOTE_CRUSOE_TELEMETRY_SERVICE" || error_exit "Failed to download $REMOTE_CRUSOE_TELEMETRY_SERVICE"
+
+status "Download crusoe_auth_token_refresh.sh and make it executable command."
+wget -q -O "$CRUSOE_TELEMETRY_AGENT_DIR/crusoe_auth_token_refresh.sh" "$GITHUB_RAW_BASE_URL/crusoe_auth_token_refresh.sh" || error_exit "Failed to download crusoe_auth_token_refresh.sh"
+chmod +x "$CRUSOE_TELEMETRY_AGENT_DIR/crusoe_auth_token_refresh.sh"
+# Create a symbolic link from /usr/bin to the actual script location.
+ln -sf "$CRUSOE_TELEMETRY_AGENT_DIR/crusoe_auth_token_refresh.sh" "$CRUSOE_AUTH_TOKEN_REFRESH_ALIAS_PATH"
 
 status "Enable systemctl service for crusoe-telemetry-agent."
 echo "systemctl daemon-reload"
