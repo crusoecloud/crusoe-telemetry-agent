@@ -64,9 +64,9 @@ fi
 # Update the CRUSOE_AUTH_TOKEN line in the .env file
 # 'sed -i.bak' edits the file in place and creates a backup file (.bak)
 # '^CRUSOE_AUTH_TOKEN=.*$' matches the line starting with CRUSOE_AUTH_TOKEN
-# 's/.../.../' performs the substitution
+# 's|...|...|g' performs the substitution
 status "Updating CRUSOE_AUTH_TOKEN in $ENV_FILE..."
-sed -i.bak "s/^CRUSOE_AUTH_TOKEN=.*$/CRUSOE_AUTH_TOKEN='${NEW_CRUSOE_AUTH_TOKEN}'/" "$ENV_FILE"
+sed -i.bak "s|^CRUSOE_AUTH_TOKEN=.*$|CRUSOE_AUTH_TOKEN='${NEW_CRUSOE_AUTH_TOKEN}'|g" "$ENV_FILE"
 rm "$ENV_FILE.bak" # Remove the backup file created by sed
 
 status "Token refresh complete."
