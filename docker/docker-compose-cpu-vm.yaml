@@ -4,7 +4,7 @@ services:
     container_name: vector
     hostname: vector
     ports:
-      - "8686:8686"
+      - "8686-8700:8686"
     volumes:
       - /etc/crusoe/telemetry_agent/vector.yaml:/etc/vector/vector.yaml:ro
     env_file:
