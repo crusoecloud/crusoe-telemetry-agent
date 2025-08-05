@@ -1,6 +1,6 @@
 services:
   crusoe-dcgm-exporter:
-    image: nvidia/dcgm-exporter:4.1.1-4.0.4-ubuntu22.04
+    image: nvcr.io/nvidia/k8s/dcgm-exporter:4.2.3-4.3.0-ubuntu22.04
     container_name: crusoe-dcgm-exporter
     hostname: crusoe-dcgm-exporter
     cap_add: [SYS_ADMIN]
