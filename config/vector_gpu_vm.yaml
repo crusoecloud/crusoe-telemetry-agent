@@ -1,4 +1,13 @@
 sources:
+    host_metrics:
+        type: host_metrics
+        collectors:
+            - cpu
+            - disk
+            - memory
+            - network
+        scrape_interval_secs: 60
+
     dcgm_metrics:
         type: prometheus_scrape
         endpoints:
@@ -9,6 +18,7 @@ transforms:
     add_vm_id_label:
         type: remap
         inputs:
+            - host_metrics
             - dcgm_metrics
         source: |
             del(.tags.Hostname)

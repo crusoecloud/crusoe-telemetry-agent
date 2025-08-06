@@ -1,5 +1,5 @@
 sources:
-    basic_metrics:
+    host_metrics:
         type: host_metrics
         collectors:
             - cpu
@@ -12,7 +12,7 @@ transforms:
     add_vm_id_label:
         type: remap
         inputs:
-            - basic_metrics
+            - host_metrics
         source: |
             .tags.vm_id = "${VM_ID}"
 
