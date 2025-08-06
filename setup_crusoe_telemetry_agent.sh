@@ -107,15 +107,12 @@ if lspci | grep -q "NVIDIA Corporation"; then
 
 # if VM has no NVIDIA GPUs
 else
-  # The original script had an error_exit here. If CPU VMs are not supported, this should remain.
-  # If they are intended to be supported later, this error_exit should be removed and the following
-  # wget commands for CPU configs would be active.
-  error_exit "Non-GPU VMs are currently not supported."
-  # status "Copy CPU Vector config."
-  # wget -q -O "$CRUSOE_TELEMETRY_AGENT_DIR/vector.yaml" "$GITHUB_RAW_BASE_URL/$REMOTE_VECTOR_CONFIG_CPU_VM" || error_exit "Failed to download $REMOTE_VECTOR_CONFIG_CPU_VM"
+  #  error_exit "Non-GPU VMs are currently not supported."
+   status "Copy CPU Vector config."
+   wget -q -O "$CRUSOE_TELEMETRY_AGENT_DIR/vector.yaml" "$GITHUB_RAW_BASE_URL/$REMOTE_VECTOR_CONFIG_CPU_VM" || error_exit "Failed to download $REMOTE_VECTOR_CONFIG_CPU_VM"
 
-  # status "Copy CPU docker-compose file."
-  # wget -q -O "$CRUSOE_TELEMETRY_AGENT_DIR/docker-compose.yaml" "$GITHUB_RAW_BASE_URL/$REMOTE_DOCKER_COMPOSE_CPU_VM" || error_exit "Failed to download $REMOTE_DOCKER_COMPOSE_CPU_VM"
+   status "Copy CPU docker-compose file."
+   wget -q -O "$CRUSOE_TELEMETRY_AGENT_DIR/docker-compose.yaml" "$GITHUB_RAW_BASE_URL/$REMOTE_DOCKER_COMPOSE_CPU_VM" || error_exit "Failed to download $REMOTE_DOCKER_COMPOSE_CPU_VM"
 fi
 
 status "Fetching crusoe auth token."
