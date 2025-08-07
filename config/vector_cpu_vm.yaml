@@ -9,18 +9,20 @@ sources:
         scrape_interval_secs: 60
 
 transforms:
-    add_vm_id_label:
+    add_update_labels:
         type: remap
         inputs:
             - host_metrics
         source: |
+            del(.tags.Hostname)
             .tags.vm_id = "${VM_ID}"
+            .tags.crusoe_resource = "vm"
 
 sinks:
     cms_gateway:
         type: prometheus_remote_write
         inputs:
-            - add_vm_id_label
+            - add_update_labels
         endpoint: "https://cms-monitoring.crusoecloud.com/ingest"
         auth:
             strategy: bearer
