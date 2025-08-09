@@ -170,11 +170,11 @@ args:
 
 # env -- Set environment variables for Vector containers.
 env:
-  - name: CRUSOE_AUTH_TOKEN
+  - name: CRUSOE_MONITORING_TOKEN
     valueFrom:
       secretKeyRef:
         name: crusoe-monitoring
-        key: token
+        key: CRUSOE_MONITORING_TOKEN
 
 # envFrom -- Define environment variables from Secrets or ConfigMaps.
 envFrom:
