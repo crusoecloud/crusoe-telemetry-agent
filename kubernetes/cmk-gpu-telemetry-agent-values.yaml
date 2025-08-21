@@ -329,10 +329,24 @@ customConfig:
           - http://nvidia-dcgm-exporter-np.nvidia-gpu-operator:9401/metrics
         scrape_interval_secs: 60
   transforms:
+    add_nodepool_id:
+      type: remap
+      inputs:
+        - dcgm_metrics
+      source: |
+        if exists(.tags.Hostname) {
+          parts, err = split(.tags.Hostname, ".")
+          host_prefix = get(parts, [0]) ?? ""
+
+          prefix_parts, err = split(host_prefix, "-")
+          nodepool_id_parts, err = slice(prefix_parts, 0, length(prefix_parts) - 1)
+
+          .tags.nodepool, err = join(nodepool_id_parts, "-")
+        }
     add_update_labels:
         type: remap
         inputs:
-            - dcgm_metrics
+            - add_nodepool_id
             - host_metrics
         source: |
             .tags.cluster_id = "${CRUSOE_CLUSTER_ID}"
