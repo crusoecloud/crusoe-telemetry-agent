@@ -1,0 +1,34 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Values.job.name }}
+  namespace: {{ .Values.namespace }}
+spec:
+  ttlSecondsAfterFinished: {{ .Values.job.ttlSecondsAfterFinished }}
+  template:
+    spec:
+      serviceAccountName: secret-manager-sa
+      restartPolicy: Never
+      containers:
+        - name: ubuntu-worker
+          image: {{ .Values.job.image }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.existingSecret }}
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -ex
+              apt-get update && apt-get install -y curl ca-certificates
+              KUBE_LATEST=$(curl -L -s https://dl.k8s.io/release/stable.txt)
+              curl -LO "https://dl.k8s.io/release/${KUBE_LATEST}/bin/linux/amd64/kubectl"
+              install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+
+              echo "deb [trusted=yes] https://apt.fury.io/crusoe/ * *" > /etc/apt/sources.list.d/fury.list
+              apt update && apt install -y crusoe
+              export CRUSOE_ACCESS_KEY_ID="${CRUSOE_ACCESS_KEY}"
+              crusoe whoami
+              export CRUSOE_MONITORING_TOKEN=$(crusoe monitoring tokens create | grep "monitor token:" | awk '{print $3}')
+              kubectl create secret generic crusoe-monitoring \
+                --from-literal=CRUSOE_MONITORING_TOKEN="${CRUSOE_MONITORING_TOKEN}" \
+                -n {{ .Values.namespace }} --dry-run=client -o yaml | kubectl apply -f -
