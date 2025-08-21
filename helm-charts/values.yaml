@@ -1,0 +1,24 @@
+namespace: crusoe-system
+
+# Secrets
+existingSecret: crusoe-secrets
+
+# GPU integration
+gpuCluster: false
+
+# Crusoe job
+job:
+  name: crusoe-monitoring-token-job
+  image: ubuntu:22.04
+  ttlSecondsAfterFinished: 300
+
+# Vector Helm repo
+vector:
+  # Minimal defaults; override via additional values files.
+  # For the vector chart, this typically controls whether to run as daemonset/aggregator and sinks.
+  # Ensure Vector consumes the crusoe-monitoring token via envFrom.
+  enabled: true
+  fullnameOverride: crusoe-telemetry-agent
+  envFrom:
+    - secretRef:
+        name: crusoe-monitoring
