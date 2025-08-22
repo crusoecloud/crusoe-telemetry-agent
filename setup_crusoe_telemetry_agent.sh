@@ -60,6 +60,49 @@ install_docker() {
   curl -fsSL https://get.docker.com | sh
 }
 
+# Function to check and upgrade DCGM version
+upgrade_dcgm() {
+  status "Checking DCGM version for upgrade."
+
+  local dcgm_version_raw=$(dcgmi --version | grep 'DCGM Version:' | awk '{print $3}' | cut -d'.' -f1)
+  local dcgm_version_major=${dcgm_version_raw:0:1}
+
+  if [[ "$dcgm_version_major" -lt 4 ]]; then
+    status "Current DCGM version ($dcgm_version_major.x.x) is older than 4.x.x. Upgrading DCGM."
+
+    # Stop DCGM service
+    systemctl --now disable nvidia-dcgm || error_exit "Failed to disable and stop nvidia-dcgm service."
+
+    # Purge old packages
+    dpkg --list datacenter-gpu-manager &> /dev/null && apt purge --yes datacenter-gpu-manager
+    dpkg --list datacenter-gpu-manager-config &> /dev/null && apt purge --yes datacenter-gpu-manager-config
+
+    # Update package lists
+    apt-get update || error_exit "Failed to update package lists."
+
+    # Get CUDA version
+    if ! command_exists nvidia-smi; then
+      error_exit "nvidia-smi not found. Cannot determine CUDA version for DCGM upgrade."
+    fi
+    local CUDA_VERSION=$(nvidia-smi -q | sed -E -n 's/CUDA Version[ :]+([0-9]+)[.].*/\1/p')
+
+    if [[ -z "$CUDA_VERSION" ]]; then
+      error_exit "Could not determine CUDA version. DCGM upgrade aborted."
+    fi
+    echo "Found CUDA Version: $CUDA_VERSION"
+
+    # Install new DCGM package
+    apt-get install --yes --install-recommends "datacenter-gpu-manager-4-cuda${CUDA_VERSION}" || error_exit "Failed to install datacenter-gpu-manager-4-cuda${CUDA_VERSION}."
+
+    # Enable and start the new service
+    systemctl --now enable nvidia-dcgm || error_exit "Failed to enable and start nvidia-dcgm service."
+
+    status "DCGM upgrade complete."
+  else
+    echo "DCGM version is already 4.x.x or newer. No upgrade needed."
+  fi
+}
+
 # --- Main Script ---
 
 # Ensure the script is run as root.
@@ -90,6 +133,8 @@ if lspci | grep -q "NVIDIA Corporation"; then
   status "Ensure NVIDIA dependencies exist."
   if command_exists dcgmi && command_exists nvidia-ctk; then
     echo "Required NVIDIA dependencies are already installed."
+    # Check and upgrade DCGM here
+    upgrade_dcgm
   else
     error_exit "Cannot find required NVIDIA dependencies. Please install them and try again."
   fi
