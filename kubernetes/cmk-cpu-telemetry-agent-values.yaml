@@ -42,7 +42,7 @@ image:
   pullSecrets: []
   # image.tag -- The tag to use for Vector's image.
   # @default -- Derived from the Chart's appVersion.
-  tag: ""
+  tag: "nightly-debian"
   # image.sha -- The SHA to use for Vector's image.
   sha: ""
   # image.base -- The base distribution to use for vector. If set, then the base in appVersion will be replaced with this base alongside the version.
@@ -161,7 +161,11 @@ workloadResourceAnnotations: {}
 securityContext: {}
 
 # command -- Override Vector's default command.
-command: []
+command: [
+  "/bin/sh",
+  "-c",
+  "export VM_ID=$(cat /host/sys/class/dmi/id/product_uuid) && /usr/bin/vector --config /etc/vector/vector.yaml"
+]
 
 # args -- Override Vector's default arguments.
 args:
@@ -330,8 +334,8 @@ customConfig:
             - host_metrics
         source: |
             .tags.cluster_id = "${CRUSOE_CLUSTER_ID}"
-            .tags.project_id = "${CRUSOE_PROJECT_ID}"
-            .tags.crusoe_resource = "k8s"
+            .tags.vm_id = "${VM_ID}"
+            .tags.crusoe_resource = "vm"
   sinks:
     cms_gateway:
       type: prometheus_remote_write
