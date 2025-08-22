@@ -7,13 +7,13 @@ It then deploys Vector using the generated token.
 ## Quickstart
 
 ```bash
-helm dependency update crusoe-telemetry-agent
-helm install crusoe-telemetry-agent ./crusoe-telemetry-agent -n crusoe-system -f ./crusoe-telemetry-agent/values-cpu.yaml
+helm dependency update helm-charts/
+helm install crusoe-telemetry-agent ./helm-charts -n crusoe-system -f ./helm-charts/values-cpu.yaml
 ```
 
 For GPU clusters:
 ```bash
-helm install crusoe-telemetry-agent ./crusoe-telemetry-agent -n crusoe-system -f ./crusoe-telemetry-agent.values-gpu.yaml
+helm install crusoe-telemetry-agent ./helm-charts -n crusoe-system -f ./helm-charts/values-gpu.yaml
 ```
 
 If you need to re-run token generation on upgrade, simply run `helm upgrade` and the hook will execute again.
