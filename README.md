@@ -10,7 +10,7 @@ wget https://raw.githubusercontent.com/crusoecloud/crusoe-telemetry-agent/refs/h
 ```
 2. Once the script is successfully downloaded. Once the script is successfully downloaded. Grant execute permission to the the script:
 ```
-chmod +x setup_crusoe_telemetry_agent.shsetup_crusoe_telemetry_agent.sh
+chmod +x setup_crusoe_telemetry_agent.sh
 ```
 3. Run the installer:
 ```
