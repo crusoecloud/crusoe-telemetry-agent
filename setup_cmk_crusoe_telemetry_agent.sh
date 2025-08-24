@@ -33,6 +33,73 @@ if kubectl get namespace nvidia-gpu-operator >/dev/null 2>&1; then
   if kubectl get pods -n nvidia-gpu-operator -l app=nvidia-dcgm-exporter -o name | grep -q .; then
     echo "✅ 'nvidia-dcgm-exporter' application found. Applying its service manifest."
     GPU_CLUSTER="true"
+    # Create configmap for dcgm-exporter metrics config
+    kubectl create configmap dcgm-exporter-config \
+      --from-literal=dcp-metrics-included.csv="$(curl -sL https://raw.githubusercontent.com/crusoecloud/crusoe-telemetry-agent/refs/heads/main/config/dcp-metrics-included.csv)" \
+      -n nvidia-gpu-operator
+
+    # Patch dcgm-exporter daemonset to use custom dcgm-exporter metrics file
+    kubectl patch daemonset nvidia-dcgm-exporter \
+      -n nvidia-gpu-operator \
+      --type='strategic' \
+      -p '{
+        "spec": {
+          "template": {
+            "spec": {
+              "volumes": [
+                {
+                  "name": "dcgm-exporter-config",
+                  "configMap": {
+                    "name": "dcgm-exporter-config",
+    				"items": [
+    					{
+    						"key": "dcp-metrics-included.csv",
+    						"path": "dcp-metrics-custom.csv"
+    					}
+    				]
+                  }
+                }
+              ],
+              "containers": [
+                {
+                  "name": "nvidia-dcgm-exporter",
+                  "volumeMounts": [
+                    {
+                      "name": "dcgm-exporter-config",
+                      "mountPath": "/etc/dcgm-exporter/dcp-metrics-custom.csv",
+                      "subPath": "dcp-metrics-custom.csv"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }'
+
+    kubectl patch daemonset nvidia-dcgm-exporter \
+      -n nvidia-gpu-operator \
+      --type='strategic' \
+      -p '{
+        "spec": {
+          "template": {
+            "spec": {
+              "containers": [
+                {
+                  "name": "nvidia-dcgm-exporter",
+                  "env": [
+                    {
+                      "name": "DCGM_EXPORTER_COLLECTORS",
+                      "value": "/etc/dcgm-exporter/dcp-metrics-custom.csv"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }'
+
     # Create the Kubernetes Service manifest using a Here Document
     cat <<EOF | kubectl apply -f -
 apiVersion: v1
@@ -167,36 +234,36 @@ EOF
 echo "✅ Successfully applied Kubernetes manifests."
 echo "---[ Waiting for job to complete or fail ]---"
 
-# Wait for job completion in the background
-kubectl wait --for=condition=complete job/${JOB_NAME} -n ${NAMESPACE} --timeout=300s &
-completion_pid=$!
-
-# Wait for job failure in the background
-kubectl wait --for=condition=failed job/${JOB_NAME} -n ${NAMESPACE} --timeout=300s &
-failure_pid=$!
-
-# Wait for either of the background jobs to finish by polling their process status
-while kill -0 $completion_pid >/dev/null 2>&1 && kill -0 $failure_pid >/dev/null 2>&1; do
-  sleep 2
-done
-
-# Check the final status of the job and echo a message
-if kubectl get job ${JOB_NAME} -n ${NAMESPACE} -o jsonpath='{.status.conditions[?(@.type=="SuccessCriteriaMet")].status}' | grep -q "True"; then
-  echo "✅ Job '${JOB_NAME}' completed successfully."
-else
-  echo "❌ Job '${JOB_NAME}' failed. Check logs for details. Prompting user to create token manually."
-  echo "Use 'crusoe monitoring tokens create' command to generate a new monitoringn token"
-  echo "Enter the crusoe monitoring token:"
-  read -s CRUSOE_MONITORING_TOKEN # -s for silent input (no echo)
-  echo "" # Add a newline after the silent input for better readability
-  # if required verify length of the token
-
-  # Create the 'crusoe-monitoring' secret in the '${NAMESPACE}' namespace. Using apply for idempotency.
-  kubectl create secret generic crusoe-monitoring --from-literal=CRUSOE_MONITORING_TOKEN="${CRUSOE_MONITORING_TOKEN}" -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -        
-fi
-
-echo "Cleaning up crusoe-monitoring-token-job."
-kubectl -n crusoe-system delete job/crusoe-monitoring-token-job
+## Wait for job completion in the background
+#kubectl wait --for=condition=complete job/${JOB_NAME} -n ${NAMESPACE} --timeout=300s &
+#completion_pid=$!
+#
+## Wait for job failure in the background
+#kubectl wait --for=condition=failed job/${JOB_NAME} -n ${NAMESPACE} --timeout=300s &
+#failure_pid=$!
+#
+## Wait for either of the background jobs to finish by polling their process status
+#while kill -0 $completion_pid >/dev/null 2>&1 && kill -0 $failure_pid >/dev/null 2>&1; do
+#  sleep 2
+#done
+#
+## Check the final status of the job and echo a message
+#if kubectl get job ${JOB_NAME} -n ${NAMESPACE} -o jsonpath='{.status.conditions[?(@.type=="SuccessCriteriaMet")].status}' | grep -q "True"; then
+#  echo "✅ Job '${JOB_NAME}' completed successfully."
+#else
+#  echo "❌ Job '${JOB_NAME}' failed. Check logs for details. Prompting user to create token manually."
+#  echo "Use 'crusoe monitoring tokens create' command to generate a new monitoringn token"
+#  echo "Enter the crusoe monitoring token:"
+#  read -s CRUSOE_MONITORING_TOKEN # -s for silent input (no echo)
+#  echo "" # Add a newline after the silent input for better readability
+#  # if required verify length of the token
+#
+#  # Create the 'crusoe-monitoring' secret in the '${NAMESPACE}' namespace. Using apply for idempotency.
+#  kubectl create secret generic crusoe-monitoring --from-literal=CRUSOE_MONITORING_TOKEN="${CRUSOE_MONITORING_TOKEN}" -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+#fi
+#
+#echo "Cleaning up crusoe-monitoring-token-job."
+#kubectl -n crusoe-system delete job/crusoe-monitoring-token-job
 
 echo ""
 echo "--------------------------------------------------------"
