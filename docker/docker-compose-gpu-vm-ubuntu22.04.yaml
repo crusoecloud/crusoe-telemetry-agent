@@ -14,9 +14,9 @@ services:
       - crusoe-metrics-network
     deploy:
       resources:
-        limits:
-          cpus: "0.5"
-          memory: "2g"
+#        limits:
+#          cpus: "0.5"
+#          memory: "2g"
         reservations:
           devices:
             - driver: nvidia
@@ -38,11 +38,11 @@ services:
     privileged: true
     networks:
       - crusoe-metrics-network
-    deploy:
-      resources:
-        limits:
-          cpus: "0.25"
-          memory: "1g"
+#    deploy:
+#      resources:
+#        limits:
+#          cpus: "0.25"
+#          memory: "1g"
     # Delay start of vector to wait for dcgm-exporter container to start
     entrypoint: /bin/sh -c "sleep 5 && /usr/bin/vector --config /etc/vector/vector.yaml"
 
