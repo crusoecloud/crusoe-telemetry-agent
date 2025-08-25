@@ -13,6 +13,7 @@ sources:
         endpoints:
             - http://crusoe-dcgm-exporter:9400/metrics
         scrape_interval_secs: 60
+        scrape_timeout_secs: 10
 
 transforms:
     add_update_labels:
