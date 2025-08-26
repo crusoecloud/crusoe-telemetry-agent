@@ -342,6 +342,7 @@ vector:
         endpoints:
           - http://nvidia-dcgm-exporter-np.nvidia-gpu-operator:9401/metrics
         scrape_interval_secs: 60
+        scrape_timeout_secs: 50
     transforms:
       add_nodepool_id:
         type: remap
@@ -388,7 +389,7 @@ vector:
         request:
           concurrency: none
           rate_limit_duration_secs: 60
-          rate_limit_num: 1
+          rate_limit_num: 10
         compression: snappy
         tls:
           verify_certificate: true
@@ -406,7 +407,7 @@ vector:
         request:
           concurrency: none
           rate_limit_duration_secs: 60
-          rate_limit_num: 1
+          rate_limit_num: 10
         compression: snappy
         tls:
           verify_certificate: true
