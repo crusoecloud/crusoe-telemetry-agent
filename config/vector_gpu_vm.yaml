@@ -6,12 +6,19 @@ sources:
             - disk
             - memory
             - network
+        network:
+          devices:
+            excludes:
+              - "lo*"
+            includes:
+              - "ens*"
+              - "ib*"
         scrape_interval_secs: 60
 
     dcgm_metrics:
         type: prometheus_scrape
         endpoints:
-            - http://crusoe-dcgm-exporter:9400/metrics
+            - http://localhost:9400/metrics
         scrape_interval_secs: 60
         scrape_timeout_secs: 50
 
