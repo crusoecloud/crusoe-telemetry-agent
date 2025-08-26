@@ -12,7 +12,6 @@ sources:
               - "lo*"
             includes:
               - "ens*"
-              - "ib*"
         scrape_interval_secs: 60
 
     dcgm_metrics:
