@@ -6,6 +6,12 @@ sources:
             - disk
             - memory
             - network
+        network:
+          devices:
+            excludes:
+              - "lo*"
+            includes:
+              - "ens*"
         scrape_interval_secs: 60
 
 transforms:

@@ -7,45 +7,31 @@ services:
     volumes:
       - /etc/crusoe/telemetry_agent/dcp-metrics-included.csv:/etc/dcgm-exporter/dcp-metrics-included.csv:ro
     command: -f /etc/dcgm-exporter/dcp-metrics-included.csv
-    ports:
-      - "9400-9425:9400"
     privileged: true
-    networks:
-      - crusoe-metrics-network
     deploy:
       resources:
-#        limits:
-#          cpus: "0.5"
-#          memory: "2g"
         reservations:
           devices:
             - driver: nvidia
               count: all
               capabilities: [ gpu ]
+    network_mode: host
 
   crusoe-vector:
     image: timberio/vector:0.46.1-debian
     container_name: crusoe-vector
     hostname: crusoe-vector
-    ports:
-      - "8686-8700:8686"
     volumes:
       - /etc/crusoe/telemetry_agent/vector.yaml:/etc/vector/vector.yaml:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
     env_file:
       - ./.env
+    environment:
+      - PROCFS_ROOT=/host/proc
+      - SYSFS_ROOT=/host/sys
     depends_on:
       - crusoe-dcgm-exporter
     privileged: true
-    networks:
-      - crusoe-metrics-network
-#    deploy:
-#      resources:
-#        limits:
-#          cpus: "0.25"
-#          memory: "1g"
-    # Delay start of vector to wait for dcgm-exporter container to start
     entrypoint: /bin/sh -c "sleep 5 && /usr/bin/vector --config /etc/vector/vector.yaml"
-
-networks:
-  crusoe-metrics-network:
-    driver: bridge
+    network_mode: host
