@@ -4,21 +4,69 @@
 UBUNTU_OS_VERSION=$(lsb_release -r -s)
 CRUSOE_VM_ID=$(dmidecode -s system-uuid)
 
-# GitHub raw content base URL
-GITHUB_RAW_BASE_URL="https://raw.githubusercontent.com/crusoecloud/crusoe-telemetry-agent/main"
+# GitHub branch (optional override via CLI, defaults to main)
+GITHUB_BRANCH="main"
 
 # Define paths for config files within the GitHub repository
 REMOTE_VECTOR_CONFIG_GPU_VM="config/vector_gpu_vm.yaml"
 REMOTE_VECTOR_CONFIG_CPU_VM="config/vector_cpu_vm.yaml"
 REMOTE_DCGM_EXPORTER_METRICS_CONFIG="config/dcp-metrics-included.csv"
-REMOTE_DOCKER_COMPOSE_GPU_VM_UBUNTU_22="docker/docker-compose-gpu-vm-ubuntu22.04.yaml"
-REMOTE_DOCKER_COMPOSE_CPU_VM="docker/docker-compose-cpu-vm.yaml"
+REMOTE_DOCKER_COMPOSE_DCGM_EXPORTER_UBUNTU_22="docker/docker-compose-dcgm-exporter-ubuntu22.04.yaml"
+REMOTE_DOCKER_COMPOSE_VECTOR="docker/docker-compose-vector.yaml"
 REMOTE_CRUSOE_TELEMETRY_SERVICE="systemctl/crusoe-telemetry-agent.service"
+REMOTE_CRUSOE_DCGM_EXPORTER_SERVICE="systemctl/crusoe-dcgm-exporter.service"
 SYSTEMCTL_DIR="/etc/systemd/system"
 CRUSOE_TELEMETRY_AGENT_DIR="/etc/crusoe/telemetry_agent"
 CRUSOE_AUTH_TOKEN_LENGTH=82
 ENV_FILE="$CRUSOE_TELEMETRY_AGENT_DIR/.env" # Define the .env file path
 CRUSOE_AUTH_TOKEN_REFRESH_ALIAS_PATH="/usr/bin/crusoe_auth_token_refresh"
+
+# Optional parameters with defaults
+DCGM_EXPORTER_SERVICE_NAME="crusoe-dcgm-exporter.service"
+DCGM_EXPORTER_SERVICE_PORT="9400"
+
+# CLI args parsing
+usage() {
+  echo "Usage: $0 [--dcgm-exporter-service-name NAME] [--dcgm-exporter-service-port PORT] [--branch BRANCH]"
+  echo "Defaults: NAME=crusoe-dcgm-exporter.service, PORT=9400, BRANCH=main"
+}
+
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --dcgm-exporter-service-name|-n)
+        if [[ -n "$2" ]]; then
+          DCGM_EXPORTER_SERVICE_NAME="$2"; shift 2
+        else
+          error_exit "Missing value for $1"
+        fi
+        ;;
+      --dcgm-exporter-service-port|-p)
+        if [[ -n "$2" ]]; then
+          DCGM_EXPORTER_SERVICE_PORT="$2"; shift 2
+        else
+          error_exit "Missing value for $1"
+        fi
+        ;;
+      --branch|-b)
+        if [[ -n "$2" ]]; then
+          GITHUB_BRANCH="$2"; shift 2
+        else
+          error_exit "Missing value for $1"
+        fi
+        ;;
+      --help|-h)
+        usage; exit 0;;
+      *)
+        echo "Unknown option: $1"; usage; exit 1;;
+    esac
+  done
+}
+
+# Check if a systemd unit exists (anywhere on the systemd path)
+service_exists() {
+  systemctl cat "$1" >/dev/null 2>&1
+}
 
 # --- Helper Functions ---
 
@@ -103,6 +151,12 @@ upgrade_dcgm() {
   fi
 }
 
+# Parse command line arguments
+parse_args "$@"
+
+# Update base URL to reflect chosen branch
+GITHUB_RAW_BASE_URL="https://raw.githubusercontent.com/crusoecloud/crusoe-telemetry-agent/${GITHUB_BRANCH}"
+
 # --- Main Script ---
 
 # Ensure the script is run as root.
@@ -129,14 +183,19 @@ fi
 
 # Download required config files
 # if VM has NVIDIA GPUs
-if lspci | grep -q "NVIDIA Corporation"; then
+HAS_NVIDIA_GPUS=false
+if command_exists nvidia-smi && nvidia-smi -L >/dev/null 2>&1; then
+  HAS_NVIDIA_GPUS=true
+fi
+
+if $HAS_NVIDIA_GPUS; then
   status "Ensure NVIDIA dependencies exist."
   if command_exists dcgmi && command_exists nvidia-ctk; then
     echo "Required NVIDIA dependencies are already installed."
     # Check and upgrade DCGM here
     upgrade_dcgm
   else
-    error_exit "Cannot find required NVIDIA dependencies. Please install them and try again."
+    error_exit "Please make sure NVIDIA dependencies (dcgm & nvidia-ctk) are installed and try again."
   fi
 
   check_os_support
@@ -147,18 +206,31 @@ if lspci | grep -q "NVIDIA Corporation"; then
   status "Download GPU Vector config."
   wget -q -O "$CRUSOE_TELEMETRY_AGENT_DIR/vector.yaml" "$GITHUB_RAW_BASE_URL/$REMOTE_VECTOR_CONFIG_GPU_VM" || error_exit "Failed to download $REMOTE_VECTOR_CONFIG_GPU_VM"
 
-  status "Download GPU docker-compose file."
-  wget -q -O "$CRUSOE_TELEMETRY_AGENT_DIR/docker-compose.yaml" "$GITHUB_RAW_BASE_URL/$REMOTE_DOCKER_COMPOSE_GPU_VM_UBUNTU_22" || error_exit "Failed to download $REMOTE_DOCKER_COMPOSE_GPU_VM_UBUNTU_22"
+  # Only download DCGM Exporter artifacts if the specified service does not already exist
+  if service_exists "$DCGM_EXPORTER_SERVICE_NAME"; then
+    echo "$DCGM_EXPORTER_SERVICE_NAME already exists. Skipping DCGM Exporter compose and service download."
+  else
+    status "Download DCGM Exporter docker-compose file."
+    wget -q -O "$CRUSOE_TELEMETRY_AGENT_DIR/docker-compose-dcgm-exporter.yaml" "$GITHUB_RAW_BASE_URL/$REMOTE_DOCKER_COMPOSE_DCGM_EXPORTER_UBUNTU_22" || error_exit "Failed to download $REMOTE_DOCKER_COMPOSE_DCGM_EXPORTER_UBUNTU_22"
 
-# if VM has no NVIDIA GPUs
+    status "Download $DCGM_EXPORTER_SERVICE_NAME systemd unit."
+    wget -q -O "$SYSTEMCTL_DIR/$DCGM_EXPORTER_SERVICE_NAME" "$GITHUB_RAW_BASE_URL/$REMOTE_CRUSOE_DCGM_EXPORTER_SERVICE" || error_exit "Failed to download $REMOTE_CRUSOE_DCGM_EXPORTER_SERVICE"
+  fi
+
+  status "Enable and start systemd services for $DCGM_EXPORTER_SERVICE_NAME."
+  echo "systemctl daemon-reload"
+  systemctl daemon-reload
+  echo "systemctl enable $DCGM_EXPORTER_SERVICE_NAME"
+  systemctl enable "$DCGM_EXPORTER_SERVICE_NAME"
+  echo "systemctl start $DCGM_EXPORTER_SERVICE_NAME"
+  systemctl start "$DCGM_EXPORTER_SERVICE_NAME"
 else
-  #  error_exit "Non-GPU VMs are currently not supported."
    status "Copy CPU Vector config."
    wget -q -O "$CRUSOE_TELEMETRY_AGENT_DIR/vector.yaml" "$GITHUB_RAW_BASE_URL/$REMOTE_VECTOR_CONFIG_CPU_VM" || error_exit "Failed to download $REMOTE_VECTOR_CONFIG_CPU_VM"
-
-   status "Copy CPU docker-compose file."
-   wget -q -O "$CRUSOE_TELEMETRY_AGENT_DIR/docker-compose.yaml" "$GITHUB_RAW_BASE_URL/$REMOTE_DOCKER_COMPOSE_CPU_VM" || error_exit "Failed to download $REMOTE_DOCKER_COMPOSE_CPU_VM"
 fi
+
+status "Download Vector docker-compose file."
+wget -q -O "$CRUSOE_TELEMETRY_AGENT_DIR/docker-compose-vector.yaml" "$GITHUB_RAW_BASE_URL/$REMOTE_DOCKER_COMPOSE_VECTOR" || error_exit "Failed to download $REMOTE_DOCKER_COMPOSE_VECTOR"
 
 status "Fetching crusoe auth token."
 if [[ -z "$CRUSOE_AUTH_TOKEN" ]]; then
@@ -179,6 +251,7 @@ status "Creating .env file with CRUSOE_AUTH_TOKEN and VM_ID."
 cat <<EOF > "$ENV_FILE"
 CRUSOE_AUTH_TOKEN='${CRUSOE_AUTH_TOKEN}'
 VM_ID='${CRUSOE_VM_ID}'
+DCGM_EXPORTER_PORT='${DCGM_EXPORTER_SERVICE_PORT}'
 EOF
 echo ".env file created at $ENV_FILE"
 
@@ -191,12 +264,17 @@ chmod +x "$CRUSOE_TELEMETRY_AGENT_DIR/crusoe_auth_token_refresh.sh"
 # Create a symbolic link from /usr/bin to the actual script location.
 ln -sf "$CRUSOE_TELEMETRY_AGENT_DIR/crusoe_auth_token_refresh.sh" "$CRUSOE_AUTH_TOKEN_REFRESH_ALIAS_PATH"
 
-status "Enable systemctl service for crusoe-telemetry-agent."
+status "Enable and start systemd services for crusoe-telemetry-agent."
 echo "systemctl daemon-reload"
 systemctl daemon-reload
 echo "systemctl enable crusoe-telemetry-agent.service"
 systemctl enable crusoe-telemetry-agent.service
+echo "systemctl start crusoe-telemetry-agent.service"
+systemctl start crusoe-telemetry-agent
 
 status "Setup Complete!"
-echo "Run: 'sudo systemctl start crusoe-telemetry-agent' to start monitoring metrics."
+if $HAS_NVIDIA_GPUS; then
+  echo "Check status of $DCGM_EXPORTER_SERVICE_NAME: 'sudo systemctl status $DCGM_EXPORTER_SERVICE_NAME'"
+fi
+echo "Check status of crusoe-telemetry-agent service: 'sudo systemctl status crusoe-telemetry-agent.service'"
 echo "Setup finished successfully!"
