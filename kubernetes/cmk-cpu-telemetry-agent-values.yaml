@@ -148,7 +148,7 @@ podLabels:
 podPriorityClassName: ""
 
 # podHostNetwork -- Configure hostNetwork on Vector Pods.
-podHostNetwork: false
+podHostNetwork: true
 
 # podSecurityContext -- Allows you to overwrite the default [PodSecurityContext](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/)
 # for Vector Pods.
@@ -179,6 +179,10 @@ env:
       secretKeyRef:
         name: crusoe-monitoring
         key: CRUSOE_MONITORING_TOKEN
+  - name: PROCFS_ROOT
+    value: /host/proc
+  - name: SYSFS_ROOT
+    value: /host/sys
 
 # envFrom -- Define environment variables from Secrets or ConfigMaps.
 envFrom:
@@ -326,6 +330,13 @@ customConfig:
             - disk
             - memory
             - network
+        network:
+          devices:
+            excludes:
+              - "lo*"
+            includes:
+              - "ens*"
+              - "lxc*"
         scrape_interval_secs: 60
   transforms:
     add_update_labels:
@@ -350,7 +361,7 @@ customConfig:
       request:
         concurrency: none
         rate_limit_duration_secs: 60
-        rate_limit_num: 1
+        rate_limit_num: 10
       compression: snappy
       tls:
         verify_certificate: true
