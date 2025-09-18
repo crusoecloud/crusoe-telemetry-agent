@@ -22,3 +22,9 @@ vector:
   envFrom:
     - secretRef:
         name: crusoe-monitoring
+
+prometheus-community:
+  # Minimal defaults; override via additional values files.
+  # For the vector chart, this typically controls whether to run as daemonset/aggregator and sinks.
+  # Ensure Vector consumes the crusoe-monitoring token via envFrom.
+  enabled: true

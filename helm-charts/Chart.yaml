@@ -4,6 +4,9 @@ description: Helm chart to deploy Crusoe telemetry agent and monitoring token jo
 type: application
 version: 0.1.0
 dependencies:
-  - name: vector
+  - name: vector-aggregator
     version: "*"
     repository: "https://helm.vector.dev"
+  - name: kube-prometheus-stack
+    version: "77.9.1"
+    repository: "https://prometheus-community.github.io/helm-charts"
