@@ -159,7 +159,7 @@ vector:
   podPriorityClassName: ""
 
   # podHostNetwork -- Configure hostNetwork on Vector Pods.
-  podHostNetwork: false
+  podHostNetwork: true
 
   # podSecurityContext -- Allows you to overwrite the default [PodSecurityContext](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/)
   # for Vector Pods.
@@ -254,7 +254,7 @@ vector:
   # Configuration for Vector's Service.
   service:
     # service.enabled -- If true, create and provide a Service resource for Vector.
-    enabled: true
+    enabled: false
     # service.type -- Set the type for Vector's Service.
     type: "ClusterIP"
     # service.annotations -- Set annotations on Vector's Service.
@@ -282,7 +282,7 @@ vector:
   # Configuration for Vector's Headless Service.
   serviceHeadless:
     # serviceHeadless.enabled -- If true, create and provide a Headless Service resource for Vector.
-    enabled: true
+    enabled: false
 
   # Configuration for Vector's Ingress.
   ingress:
@@ -333,6 +333,12 @@ vector:
           - disk
           - memory
           - network
+        network:
+          devices:
+            excludes:
+              - "lo*"
+            includes:
+              - "ens*"
         scrape_interval_secs: 60
     transforms:
       enrich_node_metrics:
