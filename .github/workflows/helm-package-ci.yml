@@ -1,0 +1,30 @@
+name: HELM Package CI
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'helm-charts'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Package chart
+        run: |
+          mkdir -p docs/helm-charts
+          helm package helm-charts/crusoe-telemetry-agent -d docs/helm-charts
+          helm repo index docs/helm-charts --url https://crusoecloud.github.io/crusoe-telemetry-agent/helm-charts
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add docs/helm-charts
+          git commit -m "Update helm repo"
+          git push
