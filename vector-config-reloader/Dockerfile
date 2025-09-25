@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM ghcr.io/crusoecloud/crusoe-telemetry-agent/python:3.11-slim
 
 # Install dependencies
 RUN pip install --no-cache-dir pyyaml kubernetes
