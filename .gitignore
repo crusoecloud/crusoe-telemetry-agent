@@ -2,6 +2,6 @@
 .vscode/*
 .idea/*
 .venv/*
-/k8s/helm-charts/Chart.lock
-/k8s/helm-charts/charts/*
-/k8s/vector-config-reloader/app/__pycache__/*
+/helm-charts/Chart.lock
+/helm-charts/charts/*
+/vector-config-reloader/app/__pycache__/*
