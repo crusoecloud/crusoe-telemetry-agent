@@ -12,7 +12,7 @@ data:
       port: 9400
       path: /metrics
       scheme: http
-      scrape_interval: 60
+      scrape_interval: 50
 
     # Defaults for annotated pods
     custom_metrics:
