@@ -6,7 +6,7 @@ This chart:
 ## Quickstart
 
 ```bash
-helm repo add crusoe https://crusoecloud.github.io/crusoe-telemetry-agent/helm-charts
+helm repo add crusoe-telemetry-agent https://crusoecloud.github.io/crusoe-telemetry-agent/helm-charts
 helm repo update
-helm install crusoe crusoe/crusoe-telemetry-agent
+helm install crusoe-telemetry-agent crusoe-telemetry-agent/crusoe-telemetry-agent --namespace crusoe-system
 ```

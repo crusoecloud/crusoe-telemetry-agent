@@ -3,7 +3,9 @@ job:
   name: crusoe-monitoring-token-job
   image: ubuntu:22.04
   ttlSecondsAfterFinished: 300
-existingSecret: crusoe-secrets
+secrets:
+  crusoeMonitoringToken: crusoe-monitoring-token
+  existingSecret: crusoe-secrets
 
 # CPU profile for Vector subchart
 # Adjust according to https://helm.vector.dev
@@ -188,7 +190,7 @@ vector:
     - name: CRUSOE_MONITORING_TOKEN
       valueFrom:
         secretKeyRef:
-          name: crusoe-monitoring
+          name: crusoe-monitoring-token
           key: CRUSOE_MONITORING_TOKEN
 
   # envFrom -- Define environment variables from Secrets or ConfigMaps.
