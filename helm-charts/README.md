@@ -1,11 +1,12 @@
 # Crusoe Telemetry Agent (Helm)
-
-This chart generates a Crusoe Monitoring token via a Job and stores it in a Kubernetes Secret under crusoe-systems namespace.
-It then deploys the vector agent.
+This chart:
+1. runs a job to generate and store a monitoring token.
+2. deploys vector.dev based telemetry agent with a vector-config-reloader container.
 
 ## Quickstart
 
 ```bash
-helm dependency update crusoe-telemetry-agent
-helm install crusoe-telemetry-agent ./ -n crusoe-system -f values.yaml
+helm repo add crusoe https://crusoecloud.github.io/crusoe-telemetry-agent/helm-charts
+helm repo update
+helm install crusoe crusoe/crusoe-telemetry-agent
 ```
