@@ -18,7 +18,7 @@ jobs:
       - name: Package chart
         run: |
           mkdir -p docs/helm-charts
-          helm package helm-charts/crusoe-telemetry-agent -d docs/helm-charts
+          helm package ./helm-charts -d docs/helm-charts
           helm repo index docs/helm-charts --url https://crusoecloud.github.io/crusoe-telemetry-agent/helm-charts
 
       - name: Commit and push
