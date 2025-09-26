@@ -20,4 +20,4 @@ data:
       path: /metrics
       scheme: http
       scrape_interval: 60
-      annotation_key: crusoe.metrics.scrape
+      annotation_key: crusoe.custom_metrics.scrape
