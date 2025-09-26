@@ -5,7 +5,7 @@ metadata:
   namespace: crusoe-system
 data:
   config.yaml: |
-    # Namespace + label selector for dcgm-exporter pods
+    # configuration for dcgm-exporter pods
     dcgm:
       namespace: nvidia-gpu-operator
       label_selector: app=nvidia-dcgm-exporter
@@ -14,10 +14,10 @@ data:
       scheme: http
       scrape_interval: 60
 
-    # Defaults for annotated pods
+    # configuration for custom metrics
     custom_metrics:
       port: 9100
       path: /metrics
       scheme: http
       scrape_interval: 60
-      annotation_key: vector.scrape
+      annotation_key: crusoe.telemetry.scrape
