@@ -8,7 +8,7 @@ ssh into your Crusoe nvidia GPU VM.
 ```
 wget https://raw.githubusercontent.com/crusoecloud/crusoe-telemetry-agent/refs/heads/main/setup_crusoe_telemetry_agent.sh
 ```
-2. Once the script is successfully downloaded. Once the script is successfully downloaded. Grant execute permission to the the script:
+2. Once the script is successfully downloaded, grant execute permission to the the script:
 ```
 chmod +x setup_crusoe_telemetry_agent.sh
 ```
