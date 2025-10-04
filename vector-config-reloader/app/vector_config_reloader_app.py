@@ -160,10 +160,7 @@ class VectorConfigReloader:
 
         dcgm_exporter_ep = None
         custom_metrics_eps = []
-        for pod in self.k8s_api_client.list_pod_for_all_namespaces().items:
-            if pod.spec.node_name != self.node_name or not VectorConfigReloader.is_pod_active(pod):
-                continue
-
+        for pod in self.k8s_api_client.list_pod_for_all_namespaces(field_selector=f"spec.nodeName={self.node_name},status.phase=Running").items:
             if VectorConfigReloader.is_custom_metrics_pod(pod):
                 custom_metrics_eps.append(self.get_custom_metrics_endpoint_cfg(pod))
             elif VectorConfigReloader.is_dcgm_exporter_pod(pod):

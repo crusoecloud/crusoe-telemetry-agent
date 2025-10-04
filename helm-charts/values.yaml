@@ -19,7 +19,7 @@ metricsExporter:
   defaultDcgmExporterPort: 9400
   defaultScrapeInterval: 60
 
-logLevel: info
+logLevel: INFO
 
 # CPU profile for Vector subchart
 # Adjust according to https://helm.vector.dev
