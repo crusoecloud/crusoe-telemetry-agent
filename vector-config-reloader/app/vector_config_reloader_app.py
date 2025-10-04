@@ -44,11 +44,11 @@ class VectorConfigReloader:
             raise RuntimeError("NODE_NAME not set")
 
         self.running = True
+        config.load_incluster_config()
         self.k8s_api_client = client.CoreV1Api()
         self.k8s_event_watcher = watch.Watch()
         self.event_queue = queue.Queue()
 
-        config.load_incluster_config()
         reloader_cfg = YamlUtils.load_yaml_config(RELOADER_CONFIG_PATH)
         self.dcgm_exporter_port = reloader_cfg["dcgm_metrics"]["port"]
         self.dcgm_exporter_path = reloader_cfg["dcgm_metrics"]["path"]
