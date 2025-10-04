@@ -218,6 +218,7 @@ class VectorConfigReloader:
                 self.set_dcgm_exporter_scrape_config(current_vector_cfg, self.get_dcgm_exporter_scrape_endpoint(pod.status.pod_ip))
             else:
                 LOG.info(f"Pod {pod.metadata.name} is not a relevant metrics exporter.")
+                return
         elif VectorConfigReloader.is_pod_terminating(pod):
             if VectorConfigReloader.is_custom_metrics_pod(pod):
                 self.remove_custom_metrics_scrape_config(current_vector_cfg, self.get_custom_metrics_endpoint_cfg(pod))
@@ -225,6 +226,7 @@ class VectorConfigReloader:
                 self.remove_dcgm_exporter_scrape_config(current_vector_cfg)
             else:
                 LOG.info(f"Pod {pod.metadata.name} is not a relevant metrics exporter.")
+                return
 
         LOG.debug(f"Writing vector config: {str(current_vector_cfg)}")
         # always update the node metrics transform source to handle LiteralStr issue
