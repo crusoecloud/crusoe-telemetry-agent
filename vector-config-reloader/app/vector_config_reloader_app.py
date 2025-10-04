@@ -48,8 +48,7 @@ class VectorConfigReloader:
         self.k8s_event_watcher = watch.Watch()
         self.event_queue = queue.Queue()
 
-        self.yaml_utils = YamlUtils()
-        reloader_cfg = self.yaml_utils.load_yaml_config(RELOADER_CONFIG_PATH)
+        reloader_cfg = YamlUtils.load_yaml_config(RELOADER_CONFIG_PATH)
         self.dcgm_exporter_port = reloader_cfg["dcgm_metrics"]["port"]
         self.dcgm_exporter_path = reloader_cfg["dcgm_metrics"]["path"]
         self.dcgm_exporter_scrape_interval = reloader_cfg["dcgm_metrics"]["scrape_interval"]
@@ -156,7 +155,7 @@ class VectorConfigReloader:
             vector_cfg.get("sinks", {}).pop("cms_gateway_custom_metrics", None)
 
     def bootstrap_config(self):
-        base_cfg = self.yaml_utils.load_yaml_config(VECTOR_BASE_CONFIG_PATH)
+        base_cfg = YamlUtils.load_yaml_config(VECTOR_BASE_CONFIG_PATH)
 
         dcgm_exporter_ep = None
         custom_metrics_eps = []
@@ -175,7 +174,7 @@ class VectorConfigReloader:
         base_cfg["sinks"]["cms_gateway_node_metrics"]["endpoint"] = self.sink_endpoint
 
         LOG.debug(f"Writing vector config {str(base_cfg)}")
-        self.yaml_utils.save_yaml(VECTOR_CONFIG_PATH, base_cfg)
+        YamlUtils.save_yaml(VECTOR_CONFIG_PATH, base_cfg)
         LOG.info(f"Vector config bootstrapped!")
 
     def handle_pod_event(self, event):
@@ -184,7 +183,7 @@ class VectorConfigReloader:
             LOG.info(f"Pod {pod.metadata.name} state is neither running nor terminating.")
             return
         
-        current_vector_cfg = self.yaml_utils.load_yaml_config(VECTOR_CONFIG_PATH)
+        current_vector_cfg = YamlUtils.load_yaml_config(VECTOR_CONFIG_PATH)
 
         if VectorConfigReloader.is_pod_active(pod):
             if VectorConfigReloader.is_custom_metrics_pod(pod):
@@ -202,7 +201,7 @@ class VectorConfigReloader:
                 LOG.info(f"Pod {pod.metadata.name} is not a relevant metrics exporter.")
 
         LOG.debug(f"Writing vector config: {str(current_vector_cfg)}")
-        self.yaml_utils.save_yaml(VECTOR_CONFIG_PATH, current_vector_cfg)
+        YamlUtils.save_yaml(VECTOR_CONFIG_PATH, current_vector_cfg)
         LOG.info(f"Vector config reloaded!")
 
     def start_event_watcher(self):
