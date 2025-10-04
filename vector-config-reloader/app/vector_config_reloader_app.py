@@ -1,212 +1,285 @@
-import os, yaml, signal, argparse
+import os, signal, time, re, logging, queue, threading, sys
 from kubernetes import client, config, watch
+from utils import LiteralStr, YamlUtils
 
-running = True
+VECTOR_CONFIG_PATH = "/etc/vector/vector.yaml"
+VECTOR_BASE_CONFIG_PATH = "/etc/vector-base/vector.yaml"
+RELOADER_CONFIG_PATH = "/etc/reloader/config.yaml"
 
-class LiteralStr(str): pass
-
-def literal_str_representer(dumper, data):
-    return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="|")
-
-yaml.add_representer(LiteralStr, literal_str_representer)
-
-NODEPOOL_TAG_SCRIPT = """if exists(.tags.Hostname) {
-  parts, _ = split(.tags.Hostname, ".")
-  host_prefix = get(parts, [0]) ?? ""
-  prefix_parts, _ = split(host_prefix, "-")
-  nodepool_id_parts, _ = slice(prefix_parts, 0, length(prefix_parts) - 1)
-  .tags.nodepool, _ = join(nodepool_id_parts, "-")
+DCGM_EXPORTER_SOURCE_NAME = "dcgm_exporter_scrape"
+DCGM_EXPORTER_APP_LABEL = "nvidia-dcgm-exporter"
+NODE_METRICS_VECTOR_TRANSFORM_NAME = "enrich_node_metrics"
+NODE_METRICS_VECTOR_TRANSFORM_SOURCE = LiteralStr("""
+if exists(.tags.Hostname) {
+parts, _ = split(.tags.Hostname, ".")
+host_prefix = get(parts, [0]) ?? ""
+prefix_parts, _ = split(host_prefix, "-")
+nodepool_id_parts, _ = slice(prefix_parts, 0, length(prefix_parts) - 1)
+.tags.nodepool, _ = join(nodepool_id_parts, "-")
 }
-
-"""
-
-def handle_sigterm(sig, frame):
-    global running
-    running = False
-
-def load_reloader_config(path):
-    with open(path) as f:
-        return yaml.safe_load(f)
-
-def discover_endpoints(v1, node_name, cfg):
-    dcgm_cfg = cfg["dcgm"]
-    cm_cfg = cfg["custom_metrics"]
-
-    dcgm_endpoint = None
-    dynamic_endpoints = []
-
-    # dcgm-exporter pod (1 per node)
-    dcgm_pods = v1.list_namespaced_pod(
-        namespace=dcgm_cfg["namespace"],
-        label_selector=dcgm_cfg["label_selector"],
-        field_selector=f"spec.nodeName={node_name},status.phase=Running",
-    ).items
-    if dcgm_pods:
-        pod = dcgm_pods[0]
-        if pod.status.pod_ip:
-            dcgm_endpoint = f"{dcgm_cfg['scheme']}://{pod.status.pod_ip}:{dcgm_cfg['port']}{dcgm_cfg['path']}"
-
-    # annotated pods
-    pods = v1.list_pod_for_all_namespaces(
-        field_selector=f"spec.nodeName={node_name},status.phase=Running"
-    ).items
-    for pod in pods:
-        ann = pod.metadata.annotations or {}
-        if ann.get(cm_cfg["annotation_key"], "false").lower() == "true":
-            pod_ip = pod.status.pod_ip
-            port = ann.get(f"{cm_cfg['annotation_key']}/port", cm_cfg["port"])
-            path = ann.get(f"{cm_cfg['annotation_key']}/path", cm_cfg["path"])
-            scheme = ann.get(f"{cm_cfg['annotation_key']}/scheme", cm_cfg["scheme"])
-            if pod_ip:
-                dynamic_endpoints.append(f"{scheme}://{pod_ip}:{port}{path}")
-
-    return dcgm_endpoint, sorted(dynamic_endpoints)
-
-def merge_config(base_cfg, dcgm_ep, dynamic_eps, cfg):
-    dcgm_cfg = cfg["dcgm"]
-    cm_cfg = cfg["custom_metrics"]
-
-    cfg_out = dict(base_cfg)
-
-    # sources
-    if dcgm_ep:
-        cfg_out.setdefault("sources", {})["dcgm_exporter_scrape"] = {
-            "type": "prometheus_scrape",
-            "endpoints": [dcgm_ep],
-            "scrape_interval_secs": dcgm_cfg["scrape_interval"],
-        }
-    else:
-        cfg_out.get("sources", {}).pop("dcgm_exporter_scrape", None)
-
-    if dynamic_eps:
-        cfg_out.setdefault("sources", {})["dynamic_scrapes"] = {
-            "type": "prometheus_scrape",
-            "endpoints": dynamic_eps,
-            "scrape_interval_secs": cm_cfg["scrape_interval"],
-        }
-    else:
-        cfg_out.get("sources", {}).pop("dynamic_scrapes", None)
-
-    # transforms
-    transforms = cfg_out.setdefault("transforms", {})
-    if "add_update_labels" in transforms:
-        transforms["enrich_node_metrics"] = transforms.pop("add_update_labels")
-
-    if "enrich_node_metrics" in transforms:
-        inputs = set(transforms["enrich_node_metrics"].get("inputs", []))
-        inputs.add("host_metrics")
-        if dcgm_ep:
-            inputs.add("dcgm_exporter_scrape")
-        else:
-            inputs.discard("dcgm_exporter_scrape")
-        transforms["enrich_node_metrics"]["inputs"] = sorted(inputs)
-
-        transforms["enrich_node_metrics"]["source"] = LiteralStr(
-                NODEPOOL_TAG_SCRIPT
-                + """
 .tags.cluster_id = "${CRUSOE_CLUSTER_ID}"
 .tags.vm_id = "${VM_ID}"
 .tags.crusoe_resource = "vm"
-"""
-        )
-
-    if dynamic_eps:
-        transforms["enrich_custom_metrics"] = {
-            "type": "remap",
-            "inputs": ["dynamic_scrapes"],
-            "source": LiteralStr(NODEPOOL_TAG_SCRIPT + """
+""")
+CUSTOM_METRICS_VECTOR_TRANSFORM_NAME = "enrich_custom_metrics"
+CUSTOM_METRICS_SCRAPE_ANNOTATION = "crusoe.custom_metrics.enable_scrape"
+CUSTOM_METRICS_PORT_ANNOTATION = "crusoe.custom_metrics.port"
+CUSTOM_METRICS_PATH_ANNOTATION = "crusoe.custom_metrics.path"
+CUSTOM_METRICS_SCRAPE_INTERVAL_ANNOTATION = f"crusoe.custom_metrics.scrape_interval"
+CUSTOM_METRICS_VECTOR_TRANSFORM = {
+    "type": "remap",
+    "inputs": [],
+    "source": LiteralStr("""
+if exists(.tags.Hostname) {
+parts, _ = split(.tags.Hostname, ".")
+host_prefix = get(parts, [0]) ?? ""
+prefix_parts, _ = split(host_prefix, "-")
+nodepool_id_parts, _ = slice(prefix_parts, 0, length(prefix_parts) - 1)
+.tags.nodepool, _ = join(nodepool_id_parts, "-")
+}
+.tags.cluster_id = "${CRUSOE_CLUSTER_ID}"
+.tags.vm_id = "${VM_ID}"
 .tags.crusoe_resource = "custom_metrics"
-"""),
-        }
-    else:
-        transforms.pop("enrich_custom_metrics", None)
+""")
+}
 
-    # sinks
-    sinks = cfg_out.setdefault("sinks", {})
-    if dynamic_eps:
-        sinks["cms_gateway_custom_metrics"] = {
+SCRAPE_INTERVAL_MIN_THRESHOLD = 5
+SCRAPE_TIMEOUT_PERCENTAGE = 0.7
+MAX_EVENT_WATCHER_RETRIES = 5
+
+logging.basicConfig(
+    level=logging.INFO,  # overridden later by config's log_level
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    stream=sys.stdout,
+)
+LOG = logging.getLogger(__name__)
+
+class VectorConfigReloader:
+    def __init__(self):
+        self.node_name = os.environ.get("NODE_NAME")
+        if not self.node_name:
+            raise RuntimeError("NODE_NAME not set")
+
+        self.running = True
+        config.load_incluster_config()
+        self.k8s_api_client = client.CoreV1Api()
+        self.k8s_event_watcher = watch.Watch()
+        self.event_queue = queue.Queue()
+
+        reloader_cfg = YamlUtils.load_yaml_config(RELOADER_CONFIG_PATH)
+        self.dcgm_exporter_port = reloader_cfg["dcgm_metrics"]["port"]
+        self.dcgm_exporter_path = reloader_cfg["dcgm_metrics"]["path"]
+        self.dcgm_exporter_scrape_interval = reloader_cfg["dcgm_metrics"]["scrape_interval"]
+        self.default_custom_metrics_config = reloader_cfg["custom_metrics"]
+        self.sink_endpoint = reloader_cfg["sink"]["endpoint"]
+        self.custom_metrics_sink_config = {
             "type": "prometheus_remote_write",
-            "inputs": ["enrich_custom_metrics"],
-            "endpoint": "https://cms-monitoring.crusoecloud.com/ingest",
+            "inputs": [CUSTOM_METRICS_VECTOR_TRANSFORM_NAME],
+            "endpoint": self.sink_endpoint,
             "auth": {"strategy": "bearer", "token": "${CRUSOE_MONITORING_TOKEN}"},
             "healthcheck": {"enabled": False},
-            "request": {
-                "concurrency": "none",
-                "rate_limit_duration_secs": 60,
-                "rate_limit_num": 1,
-            },
             "compression": "snappy",
             "tls": {"verify_certificate": True, "verify_hostname": True},
         }
-    else:
-        sinks.pop("cms_gateway_custom_metrics", None)
 
-    return cfg_out
+        LOG.setLevel(reloader_cfg["log_level"])
 
-def write_config(dcgm_ep, dynamic_eps, last_state, cfg, base_config_path, vector_config_path):
-    # Always write if config file does not exist yet
-    if (dcgm_ep, dynamic_eps) == last_state and os.path.exists(vector_config_path):
-        return last_state
+    @staticmethod
+    def sanitize_name(name: str) -> str:
+        # replace invalid chars with underscores
+        return re.sub(r'[^a-zA-Z0-9_]', '_', name)
 
-    with open(base_config_path) as f:
-        base_cfg = yaml.safe_load(f)
+    @staticmethod
+    def is_pod_active(pod):
+        return pod.status.phase == "Running"
 
-    final_cfg = merge_config(base_cfg, dcgm_ep, dynamic_eps, cfg)
+    @staticmethod
+    def is_pod_terminating(pod):
+        return pod.status.phase == "Terminating"
 
-    os.makedirs(os.path.dirname(vector_config_path), exist_ok=True)
-    with open(vector_config_path, "w") as f:
-        yaml.dump(final_cfg, f, sort_keys=False)
+    @staticmethod
+    def is_custom_metrics_pod(pod):
+        annotations = pod.metadata.annotations or {}
+        return annotations and CUSTOM_METRICS_SCRAPE_ANNOTATION in annotations and annotations[CUSTOM_METRICS_SCRAPE_ANNOTATION] == "true"
 
-    print(f"[reloader] Updated vector.yaml (dcgm: {dcgm_ep}, dynamic: {dynamic_eps})")
-    return dcgm_ep, dynamic_eps
+    @staticmethod
+    def is_dcgm_exporter_pod(pod):
+        labels = pod.metadata.labels or {}
+        return labels and "app" in labels and labels["app"] == DCGM_EXPORTER_APP_LABEL
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--base-config", default="/etc/vector-base/vector.yaml")
-    parser.add_argument("--vector-config", default="/etc/vector/vector.yaml")
-    parser.add_argument("--reloader-config", default="/etc/reloader/config.yaml")
-    args = parser.parse_args()
+    def handle_sigterm(self, sig, frame):
+        self.running = False
 
-    config.load_incluster_config()
-    v1 = client.CoreV1Api()
-    w = watch.Watch()
+    def get_dcgm_exporter_scrape_endpoint(self, pod_ip) -> str:
+        return f"http://{pod_ip}:{self.dcgm_exporter_port}{self.dcgm_exporter_path}"
 
-    cfg = load_reloader_config(args.reloader_config)
+    def get_custom_metrics_endpoint_cfg(self, pod) -> dict:
+        pod_ip = pod.status.pod_ip
+        pod_name = pod.metadata.name
+        annotations = pod.metadata.annotations
+        port = int(annotations.get(CUSTOM_METRICS_PORT_ANNOTATION, self.default_custom_metrics_config["port"]))
+        path = annotations.get(CUSTOM_METRICS_PATH_ANNOTATION, self.default_custom_metrics_config["path"])
+        interval = int(annotations.get(CUSTOM_METRICS_SCRAPE_INTERVAL_ANNOTATION, self.default_custom_metrics_config["scrape_interval"]))
+        if interval < SCRAPE_INTERVAL_MIN_THRESHOLD:
+            LOG.warning(f"For pod {pod_name}, scrape interval set to: {interval} (less than 5 seconds), defaulting to {SCRAPE_INTERVAL_MIN_THRESHOLD}")
+            interval = SCRAPE_INTERVAL_MIN_THRESHOLD
+        return {
+            "url": f"http://{pod_ip}:{port}{path}",
+            "pod_name": pod_name,
+            "scrape_interval_secs": interval,
+            "scrape_timeout_secs": int(interval * SCRAPE_TIMEOUT_PERCENTAGE)
+        }
 
-    node_name = os.environ.get("NODE_NAME")
-    if not node_name:
-        raise RuntimeError("NODE_NAME not set")
+    def set_dcgm_exporter_scrape_config(self, vector_cfg: dict, dcgm_exporter_scrape_endpoint: str):
+        if dcgm_exporter_scrape_endpoint is None:
+            return
+        vector_cfg.setdefault("sources", {})[DCGM_EXPORTER_SOURCE_NAME] = {
+            "type": "prometheus_scrape",
+            "endpoints": [dcgm_exporter_scrape_endpoint],
+            "scrape_interval_secs": self.dcgm_exporter_scrape_interval,
+            "scrape_timeout_secs": int(self.dcgm_exporter_scrape_interval * SCRAPE_TIMEOUT_PERCENTAGE)
+        }
+        inputs = set(vector_cfg["transforms"][NODE_METRICS_VECTOR_TRANSFORM_NAME]["inputs"])
+        if DCGM_EXPORTER_SOURCE_NAME not in inputs:
+            vector_cfg["transforms"][NODE_METRICS_VECTOR_TRANSFORM_NAME]["inputs"].append(DCGM_EXPORTER_SOURCE_NAME)
 
-    signal.signal(signal.SIGINT, handle_sigterm)
-    signal.signal(signal.SIGTERM, handle_sigterm)
+    def remove_dcgm_exporter_scrape_config(self, vector_cfg: dict):
+        vector_cfg.get("sources", {}).pop(DCGM_EXPORTER_SOURCE_NAME, None)
+        inputs = set(vector_cfg["transforms"][NODE_METRICS_VECTOR_TRANSFORM_NAME].get("inputs", []))
+        inputs.discard(DCGM_EXPORTER_SOURCE_NAME)
+        vector_cfg["transforms"][NODE_METRICS_VECTOR_TRANSFORM_NAME]["inputs"] = sorted(inputs)
 
-    dcgm_ep, dynamic_eps = discover_endpoints(v1, node_name, cfg)
-    last_state = write_config(dcgm_ep, dynamic_eps, (None, []), cfg, args.base_config, args.vector_config)
+    def set_custom_metrics_scrape_config(self, vector_cfg: dict, custom_metrics_eps: list):
+        if not custom_metrics_eps:
+            return
+        sources = vector_cfg.get("sources")
+        transforms = vector_cfg.get("transforms")
+        enrich_custom_metrics = transforms.setdefault(CUSTOM_METRICS_VECTOR_TRANSFORM_NAME, CUSTOM_METRICS_VECTOR_TRANSFORM)
+        inputs = set(enrich_custom_metrics.get("inputs", []))
 
-    while running:
-        try:
-            stream = w.stream(
-                v1.list_pod_for_all_namespaces,
-                field_selector=f"spec.nodeName={node_name}",
-                timeout_seconds=60,
-            )
-            for event in stream:
-                if not running:
-                    break
-                pod = event["object"]
-                labels = pod.metadata.labels or {}
-                ann = pod.metadata.annotations or {}
-                if (
-                        (pod.metadata.namespace == cfg["dcgm"]["namespace"] and
-                         labels.get("app") == cfg["dcgm"]["label_selector"].split("=")[-1])
-                        or (cfg["custom_metrics"]["annotation_key"] in ann)
-                ):
-                    dcgm_ep, dynamic_eps = discover_endpoints(v1, node_name, cfg)
-                    last_state = write_config(dcgm_ep, dynamic_eps, last_state, cfg, args.base_config, args.vector_config)
-        except Exception as e:
-            print(f"Watch error: {e}, retrying...")
+        for endpoint in custom_metrics_eps:
+            source_name = f"{VectorConfigReloader.sanitize_name(endpoint['pod_name'])}_scrape"
+            sources[source_name] = {
+                "type": "prometheus_scrape",
+                "endpoints": [endpoint["url"]],
+                "scrape_interval_secs": endpoint["scrape_interval_secs"],
+                "scrape_timeout_secs": endpoint["scrape_timeout_secs"]
+            }
+            inputs.add(source_name)
+        enrich_custom_metrics["inputs"] = sorted(inputs)
+        vector_cfg["sinks"]["cms_gateway_custom_metrics"] = self.custom_metrics_sink_config
 
-    print("Exiting reloader.")
+    def remove_custom_metrics_scrape_config(self, vector_cfg: dict, custom_metrics_ep: dict):
+        source_name = f"{VectorConfigReloader.sanitize_name(custom_metrics_ep['pod_name'])}_scrape"
+        vector_cfg.get("sources", {}).pop(source_name, None)
+        inputs = set(vector_cfg["transforms"][CUSTOM_METRICS_VECTOR_TRANSFORM_NAME].get("inputs", []))
+        inputs.discard(source_name)
+        vector_cfg["transforms"][CUSTOM_METRICS_VECTOR_TRANSFORM_NAME]["inputs"] = sorted(inputs)
+        if not vector_cfg["transforms"][CUSTOM_METRICS_VECTOR_TRANSFORM_NAME]["inputs"]:
+            vector_cfg.get("sinks", {}).pop("cms_gateway_custom_metrics", None)
+
+    def bootstrap_config(self):
+        base_cfg = YamlUtils.load_yaml_config(VECTOR_BASE_CONFIG_PATH)
+
+        dcgm_exporter_ep = None
+        custom_metrics_eps = []
+        for pod in self.k8s_api_client.list_pod_for_all_namespaces(field_selector=f"spec.nodeName={self.node_name},status.phase=Running").items:
+            if VectorConfigReloader.is_custom_metrics_pod(pod):
+                custom_metrics_eps.append(self.get_custom_metrics_endpoint_cfg(pod))
+            elif VectorConfigReloader.is_dcgm_exporter_pod(pod):
+                dcgm_exporter_ep = self.get_dcgm_exporter_scrape_endpoint(pod.status.pod_ip)
+            else:
+                LOG.info(f"Pod {pod.metadata.name} is not a relevant metrics exporter.")
+
+        self.set_custom_metrics_scrape_config(base_cfg, custom_metrics_eps)
+        self.set_dcgm_exporter_scrape_config(base_cfg, dcgm_exporter_ep)
+
+        # set endpoint as per env
+        base_cfg["sinks"]["cms_gateway_node_metrics"]["endpoint"] = self.sink_endpoint
+
+        LOG.debug(f"Writing vector config {str(base_cfg)}")
+        # always update the node metrics transform source to handle LiteralStr issue
+        base_cfg["transforms"][NODE_METRICS_VECTOR_TRANSFORM_NAME]["source"] = NODE_METRICS_VECTOR_TRANSFORM_SOURCE
+        YamlUtils.save_yaml(VECTOR_CONFIG_PATH, base_cfg)
+        LOG.info(f"Vector config bootstrapped!")
+
+    def handle_pod_event(self, event):
+        pod = event["object"]
+        if not (VectorConfigReloader.is_pod_active(pod) or VectorConfigReloader.is_pod_terminating(pod)):
+            LOG.info(f"Pod {pod.metadata.name} state is neither running nor terminating.")
+            return
+        
+        current_vector_cfg = YamlUtils.load_yaml_config(VECTOR_CONFIG_PATH)
+
+        if VectorConfigReloader.is_pod_active(pod):
+            if VectorConfigReloader.is_custom_metrics_pod(pod):
+                self.set_custom_metrics_scrape_config(current_vector_cfg, [self.get_custom_metrics_endpoint_cfg(pod)])
+            elif VectorConfigReloader.is_dcgm_exporter_pod(pod):
+                self.set_dcgm_exporter_scrape_config(current_vector_cfg, self.get_dcgm_exporter_scrape_endpoint(pod.status.pod_ip))
+            else:
+                LOG.info(f"Pod {pod.metadata.name} is not a relevant metrics exporter.")
+                return
+        elif VectorConfigReloader.is_pod_terminating(pod):
+            if VectorConfigReloader.is_custom_metrics_pod(pod):
+                self.remove_custom_metrics_scrape_config(current_vector_cfg, self.get_custom_metrics_endpoint_cfg(pod))
+            elif VectorConfigReloader.is_dcgm_exporter_pod(pod):
+                self.remove_dcgm_exporter_scrape_config(current_vector_cfg)
+            else:
+                LOG.info(f"Pod {pod.metadata.name} is not a relevant metrics exporter.")
+                return
+
+        LOG.debug(f"Writing vector config: {str(current_vector_cfg)}")
+        # always update the node metrics transform source to handle LiteralStr issue
+        current_vector_cfg["transforms"][NODE_METRICS_VECTOR_TRANSFORM_NAME]["source"] = NODE_METRICS_VECTOR_TRANSFORM_SOURCE
+        YamlUtils.save_yaml(VECTOR_CONFIG_PATH, current_vector_cfg)
+        LOG.info(f"Vector config reloaded!")
+
+    def start_event_watcher(self):
+        event_watcher_retry_count = 0
+        while self.running and event_watcher_retry_count < MAX_EVENT_WATCHER_RETRIES:
+            try:
+                stream = self.k8s_event_watcher.stream(
+                    self.k8s_api_client.list_pod_for_all_namespaces,
+                    field_selector=f"spec.nodeName={self.node_name}",
+                    timeout_seconds=60,
+                )
+                for event in stream:
+                    self.event_queue.put(event)
+                event_watcher_retry_count = 0
+            except Exception as e:
+                event_watcher_retry_count += 1
+                LOG.error(f"k8s event watcher error: {e}, retrying {event_watcher_retry_count}...")
+
+    def run_reloader(self):
+        while self.running:
+            while not self.event_queue.empty():
+                event = self.event_queue.get()
+                self.handle_pod_event(event)
+            time.sleep(60)
+
+    def execute(self):
+        signal.signal(signal.SIGINT, self.handle_sigterm)
+        signal.signal(signal.SIGTERM, self.handle_sigterm)
+
+        self.bootstrap_config()
+
+        event_watcher_thread = threading.Thread(target=self.start_event_watcher)
+        reloader_thread = threading.Thread(target=self.run_reloader)
+
+        LOG.info("Starting event watcher thread...")
+        event_watcher_thread.start()
+
+        time.sleep(5)
+
+        LOG.info("Running config reloader thread...")
+        reloader_thread.start()
+
+        event_watcher_thread.join()
+        LOG.info("Event watcher thread completed.")
+        reloader_thread.join()
+        LOG.info("Config reloader thread completed.")
+
+        LOG.info("Exiting config reloader.")
 
 if __name__ == "__main__":
-    main()
+    VectorConfigReloader().execute()
