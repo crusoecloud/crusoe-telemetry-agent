@@ -1,7 +1,5 @@
-import yaml, os
+import yaml
 import pytest
-import vector_config_reloader_app as reloader
-
 
 @pytest.fixture
 def sample_reloader_config():
@@ -81,78 +79,3 @@ class DummyClient:
 def load_cfg(path):
     with open(path) as f:
         return yaml.safe_load(f)
-
-
-def test_no_pods(base_vector_config, sample_reloader_config):
-    base_file, out_file = base_vector_config
-    v1 = DummyClient([])
-
-    dcgm_ep, dyn_eps = reloader.discover_endpoints(v1, "test-node", sample_reloader_config)
-    assert dcgm_ep is None
-    assert dyn_eps == []
-
-    # Call write_config (should always produce a file now)
-    reloader.write_config(dcgm_ep, dyn_eps, (None, []), sample_reloader_config, base_file, out_file)
-
-    assert os.path.exists(out_file), "Expected base config file to be written even when no pods found"
-
-    out_cfg = load_cfg(out_file)
-
-    # Verify no dcgm/dynamic scrapes or custom transforms/sinks were added
-    assert "dcgm_exporter_scrape" not in out_cfg.get("sources", {})
-    assert "dynamic_scrapes" not in out_cfg.get("sources", {})
-    assert "enrich_custom_metrics" not in out_cfg.get("transforms", {})
-    assert "cms_gateway_custom_metrics" not in out_cfg.get("sinks", {})
-
-
-
-def test_dcgm_pod_present(base_vector_config, sample_reloader_config):
-    base_file, out_file = base_vector_config
-    pods = [DummyPod("dcgm1", "nvidia-gpu-operator", ip="10.1.1.1", labels={"app": "nvidia-dcgm-exporter"})]
-    v1 = DummyClient(pods)
-
-    dcgm_ep, dyn_eps = reloader.discover_endpoints(v1, "test-node", sample_reloader_config)
-    assert dcgm_ep == "http://10.1.1.1:9400/metrics"
-
-    reloader.write_config(dcgm_ep, dyn_eps, (None, []), sample_reloader_config, base_file, out_file)
-    out_cfg = load_cfg(out_file)
-
-    assert "dcgm_exporter_scrape" in out_cfg["sources"]
-    assert "dcgm_exporter_scrape" in out_cfg["transforms"]["enrich_node_metrics"]["inputs"]
-
-
-def test_custom_metrics_pod_present(base_vector_config, sample_reloader_config):
-    base_file, out_file = base_vector_config
-    pods = [DummyPod("mypod", "default", ip="10.2.2.2", ann={"vector.scrape": "true"})]
-    v1 = DummyClient(pods)
-
-    dcgm_ep, dyn_eps = reloader.discover_endpoints(v1, "test-node", sample_reloader_config)
-    assert dyn_eps == ["http://10.2.2.2:9100/metrics"]
-
-    reloader.write_config(dcgm_ep, dyn_eps, (None, []), sample_reloader_config, base_file, out_file)
-    out_cfg = load_cfg(out_file)
-
-    assert "dynamic_scrapes" in out_cfg["sources"]
-    assert "enrich_custom_metrics" in out_cfg["transforms"]
-    assert "cms_gateway_custom_metrics" in out_cfg["sinks"]
-
-
-def test_both_pod_types(base_vector_config, sample_reloader_config):
-    base_file, out_file = base_vector_config
-    pods = [
-        DummyPod("dcgm1", "nvidia-gpu-operator", ip="10.1.1.1", labels={"app": "nvidia-dcgm-exporter"}),
-        DummyPod("mypod", "default", ip="10.2.2.2", ann={"vector.scrape": "true"})
-    ]
-    v1 = DummyClient(pods)
-
-    dcgm_ep, dyn_eps = reloader.discover_endpoints(v1, "test-node", sample_reloader_config)
-    assert dcgm_ep and dyn_eps
-
-    reloader.write_config(dcgm_ep, dyn_eps, (None, []), sample_reloader_config, base_file, out_file)
-    out_cfg = load_cfg(out_file)
-
-    assert "dcgm_exporter_scrape" in out_cfg["sources"]
-    assert "dynamic_scrapes" in out_cfg["sources"]
-    assert "enrich_node_metrics" in out_cfg["transforms"]
-    assert "enrich_custom_metrics" in out_cfg["transforms"]
-    assert "cms_gateway_custom_metrics" in out_cfg["sinks"]

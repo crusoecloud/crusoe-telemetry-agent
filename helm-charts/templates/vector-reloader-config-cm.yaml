@@ -5,19 +5,14 @@ metadata:
   namespace: crusoe-system
 data:
   config.yaml: |
-    # configuration for dcgm-exporter pods
-    dcgm:
-      namespace: nvidia-gpu-operator
-      label_selector: app=nvidia-dcgm-exporter
-      port: 9400
-      path: /metrics
-      scheme: http
-      scrape_interval: 60
-
-    # configuration for custom metrics
+    dcgm_metrics:
+      port: {{ .Values.metricsExporter.defaultDcgmExporterPort }}
+      path: {{ .Values.metricsExporter.defaultMetricsPath }}
+      scrape_interval: {{ .Values.metricsExporter.defaultScrapeInterval }}
     custom_metrics:
-      port: 9100
-      path: /metrics
-      scheme: http
-      scrape_interval: 60
-      annotation_key: crusoe.custom_metrics.scrape
+      port: {{ .Values.metricsExporter.defaultMetricsPort }}
+      path: {{ .Values.metricsExporter.defaultMetricsPath }}
+      scrape_interval: {{ .Values.metricsExporter.defaultScrapeInterval }}
+    sink:
+      endpoint: {{ index .Values.endpoints .Values.environment | quote }}
+    log_level: {{ .Values.logLevel }}
