@@ -109,7 +109,7 @@ class VectorConfigReloader:
         return {
             "url": f"http://{pod_ip}:{port}{path}",
             "pod_name": pod_name,
-            "scrape_interval_secs": (),
+            "scrape_interval_secs": interval,
             "scrape_timeout_secs": int(interval * SCRAPE_TIMEOUT_PERCENTAGE)
         }
 
@@ -183,7 +183,7 @@ class VectorConfigReloader:
 
     def handle_pod_event(self, event):
         pod = event["object"]
-        if not VectorConfigReloader.is_pod_active(pod) or not VectorConfigReloader.is_pod_terminating(pod):
+        if not (VectorConfigReloader.is_pod_active(pod) or VectorConfigReloader.is_pod_terminating(pod)):
             LOG.info(f"Pod {pod.metadata.name} state is neither running nor terminating.")
             return
         
