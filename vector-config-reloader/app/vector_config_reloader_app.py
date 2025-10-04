@@ -1,4 +1,4 @@
-import os, signal, time, re, logging, queue, threading
+import os, signal, time, re, logging, queue, threading, sys
 from kubernetes import client, config, watch
 from utils import LiteralStr, YamlUtils
 
@@ -47,6 +47,11 @@ SCRAPE_INTERVAL_MIN_THRESHOLD = 5
 SCRAPE_TIMEOUT_PERCENTAGE = 0.7
 MAX_EVENT_WATCHER_RETRIES = 5
 
+logging.basicConfig(
+    level=logging.INFO,  # overridden later by config's log_level
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    stream=sys.stdout,
+)
 LOG = logging.getLogger(__name__)
 
 class VectorConfigReloader:
