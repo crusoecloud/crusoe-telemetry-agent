@@ -2,12 +2,13 @@ import yaml
 
 class LiteralStr(str): pass
 
-def literal_str_representer(dumper, data):
-    return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="|")
-
 class YamlUtils:
     def __init__(self):
-        yaml.add_representer(LiteralStr, literal_str_representer)
+        yaml.add_representer(LiteralStr, YamlUtils.literal_str_representer)
+
+    @staticmethod
+    def literal_str_representer(dumper, data):
+        return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="|")
 
     def load_yaml_config(self, path: str) -> dict:
         with open(path) as f:

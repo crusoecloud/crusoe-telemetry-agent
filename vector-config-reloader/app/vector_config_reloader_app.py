@@ -17,8 +17,7 @@ CUSTOM_METRICS_SCRAPE_INTERVAL_ANNOTATION = f"crusoe.custom_metrics.scrape_inter
 CUSTOM_METRICS_VECTOR_TRANSFORM = {
     "type": "remap",
     "inputs": [],
-    "source": LiteralStr("""
-if exists(.tags.Hostname) {
+    "source": LiteralStr("""if exists(.tags.Hostname) {
 parts, _ = split(.tags.Hostname, ".")
 host_prefix = get(parts, [0]) ?? ""
 prefix_parts, _ = split(host_prefix, "-")
