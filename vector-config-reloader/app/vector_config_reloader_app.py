@@ -9,7 +9,7 @@ RELOADER_CONFIG_PATH = "/etc/reloader/config.yaml"
 DCGM_EXPORTER_SOURCE_NAME = "dcgm_exporter_scrape"
 DCGM_EXPORTER_APP_LABEL = "nvidia-dcgm-exporter"
 NODE_METRICS_VECTOR_TRANSFORM_NAME = "enrich_node_metrics"
-NODE_METRICS_VECTOR_TRANSFORM_SOURCE = LiteralStr("""|
+NODE_METRICS_VECTOR_TRANSFORM_SOURCE = LiteralStr("""
 if exists(.tags.Hostname) {
 parts, _ = split(.tags.Hostname, ".")
 host_prefix = get(parts, [0]) ?? ""
@@ -29,7 +29,7 @@ CUSTOM_METRICS_SCRAPE_INTERVAL_ANNOTATION = f"crusoe.custom_metrics.scrape_inter
 CUSTOM_METRICS_VECTOR_TRANSFORM = {
     "type": "remap",
     "inputs": [],
-    "source": LiteralStr("""|
+    "source": LiteralStr("""
 if exists(.tags.Hostname) {
 parts, _ = split(.tags.Hostname, ".")
 host_prefix = get(parts, [0]) ?? ""
