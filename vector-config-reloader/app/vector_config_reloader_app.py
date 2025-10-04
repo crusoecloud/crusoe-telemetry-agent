@@ -9,6 +9,18 @@ RELOADER_CONFIG_PATH = "/etc/reloader/config.yaml"
 DCGM_EXPORTER_SOURCE_NAME = "dcgm_exporter_scrape"
 DCGM_EXPORTER_APP_LABEL = "nvidia-dcgm-exporter"
 NODE_METRICS_VECTOR_TRANSFORM_NAME = "enrich_node_metrics"
+NODE_METRICS_VECTOR_TRANSFORM_SOURCE = LiteralStr("""|
+if exists(.tags.Hostname) {
+parts, _ = split(.tags.Hostname, ".")
+host_prefix = get(parts, [0]) ?? ""
+prefix_parts, _ = split(host_prefix, "-")
+nodepool_id_parts, _ = slice(prefix_parts, 0, length(prefix_parts) - 1)
+.tags.nodepool, _ = join(nodepool_id_parts, "-")
+}
+.tags.cluster_id = "${CRUSOE_CLUSTER_ID}"
+.tags.vm_id = "${VM_ID}"
+.tags.crusoe_resource = "vm"
+""")
 CUSTOM_METRICS_VECTOR_TRANSFORM_NAME = "enrich_custom_metrics"
 CUSTOM_METRICS_SCRAPE_ANNOTATION = "crusoe.custom_metrics.enable_scrape"
 CUSTOM_METRICS_PORT_ANNOTATION = "crusoe.custom_metrics.port"
@@ -17,7 +29,8 @@ CUSTOM_METRICS_SCRAPE_INTERVAL_ANNOTATION = f"crusoe.custom_metrics.scrape_inter
 CUSTOM_METRICS_VECTOR_TRANSFORM = {
     "type": "remap",
     "inputs": [],
-    "source": LiteralStr("""if exists(.tags.Hostname) {
+    "source": LiteralStr("""|
+if exists(.tags.Hostname) {
 parts, _ = split(.tags.Hostname, ".")
 host_prefix = get(parts, [0]) ?? ""
 prefix_parts, _ = split(host_prefix, "-")
@@ -113,13 +126,17 @@ class VectorConfigReloader:
         }
 
     def set_dcgm_exporter_scrape_config(self, vector_cfg: dict, dcgm_exporter_scrape_endpoint: str):
+        if dcgm_exporter_scrape_endpoint is None:
+            return
         vector_cfg.setdefault("sources", {})[DCGM_EXPORTER_SOURCE_NAME] = {
             "type": "prometheus_scrape",
             "endpoints": [dcgm_exporter_scrape_endpoint],
             "scrape_interval_secs": self.dcgm_exporter_scrape_interval,
             "scrape_timeout_secs": int(self.dcgm_exporter_scrape_interval * SCRAPE_TIMEOUT_PERCENTAGE)
         }
-        vector_cfg["transforms"][NODE_METRICS_VECTOR_TRANSFORM_NAME]["inputs"].append(DCGM_EXPORTER_SOURCE_NAME)
+        inputs = set(vector_cfg["transforms"][NODE_METRICS_VECTOR_TRANSFORM_NAME]["inputs"])
+        if DCGM_EXPORTER_SOURCE_NAME not in inputs:
+            vector_cfg["transforms"][NODE_METRICS_VECTOR_TRANSFORM_NAME]["inputs"].append(DCGM_EXPORTER_SOURCE_NAME)
 
     def remove_dcgm_exporter_scrape_config(self, vector_cfg: dict):
         vector_cfg.get("sources", {}).pop(DCGM_EXPORTER_SOURCE_NAME, None)
@@ -128,6 +145,8 @@ class VectorConfigReloader:
         vector_cfg["transforms"][NODE_METRICS_VECTOR_TRANSFORM_NAME]["inputs"] = sorted(inputs)
 
     def set_custom_metrics_scrape_config(self, vector_cfg: dict, custom_metrics_eps: list):
+        if not custom_metrics_eps:
+            return
         sources = vector_cfg.get("sources")
         transforms = vector_cfg.get("transforms")
         enrich_custom_metrics = transforms.setdefault(CUSTOM_METRICS_VECTOR_TRANSFORM_NAME, CUSTOM_METRICS_VECTOR_TRANSFORM)
@@ -174,6 +193,8 @@ class VectorConfigReloader:
         base_cfg["sinks"]["cms_gateway_node_metrics"]["endpoint"] = self.sink_endpoint
 
         LOG.debug(f"Writing vector config {str(base_cfg)}")
+        # always update the node metrics transform source to handle LiteralStr issue
+        base_cfg["transforms"][NODE_METRICS_VECTOR_TRANSFORM_NAME]["source"] = NODE_METRICS_VECTOR_TRANSFORM_SOURCE
         YamlUtils.save_yaml(VECTOR_CONFIG_PATH, base_cfg)
         LOG.info(f"Vector config bootstrapped!")
 
@@ -201,6 +222,8 @@ class VectorConfigReloader:
                 LOG.info(f"Pod {pod.metadata.name} is not a relevant metrics exporter.")
 
         LOG.debug(f"Writing vector config: {str(current_vector_cfg)}")
+        # always update the node metrics transform source to handle LiteralStr issue
+        current_vector_cfg["transforms"][NODE_METRICS_VECTOR_TRANSFORM_NAME]["source"] = NODE_METRICS_VECTOR_TRANSFORM_SOURCE
         YamlUtils.save_yaml(VECTOR_CONFIG_PATH, current_vector_cfg)
         LOG.info(f"Vector config reloaded!")
 

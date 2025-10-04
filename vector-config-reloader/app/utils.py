@@ -9,7 +9,6 @@ def literal_str_representer(dumper, data):
 yaml.Dumper.add_representer(LiteralStr, literal_str_representer)
 yaml.SafeDumper.add_representer(LiteralStr, literal_str_representer)
 
-
 class YamlUtils:
     @staticmethod
     def load_yaml_config(path: str) -> dict:
