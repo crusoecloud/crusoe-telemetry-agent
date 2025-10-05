@@ -1,4 +1,10 @@
 namespace: crusoe-system
+environment: prod
+endpoints:
+  prod: "https://cms-monitoring.crusoecloud.com/ingest"
+  staging: "https://cms-monitoring.crusoecloud.site/ingest"
+  dev: "https://cms-monitoring.crusoecloud.xyz/ingest"
+
 job:
   name: crusoe-monitoring-token-job
   image: ubuntu:22.04
@@ -6,6 +12,14 @@ job:
 secrets:
   crusoeMonitoringToken: crusoe-monitoring-token
   existingSecret: crusoe-secrets
+
+metricsExporter:
+  defaultMetricsPath: /metrics
+  defaultMetricsPort: 9100
+  defaultDcgmExporterPort: 9400
+  defaultScrapeInterval: 60
+
+logLevel: INFO
 
 # CPU profile for Vector subchart
 # Adjust according to https://helm.vector.dev
