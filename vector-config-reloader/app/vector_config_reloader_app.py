@@ -16,7 +16,7 @@ host_prefix = get(parts, [0]) ?? ""
 prefix_parts, _ = split(host_prefix, "-")
 nodepool_id_parts, _ = slice(prefix_parts, 0, length(prefix_parts) - 1)
 .tags.nodepool, _ = join(nodepool_id_parts, "-")
-} else if exists(.tags.Host) {
+} else if exists(.tags.host) {
 prefix_parts, _ = split(.tags.Host, "-")
 nodepool_id_parts, _ = slice(prefix_parts, 0, length(prefix_parts) - 1)
 .tags.nodepool, _ = join(nodepool_id_parts, "-")
