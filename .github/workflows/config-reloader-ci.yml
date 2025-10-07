@@ -3,6 +3,8 @@ name: Config Reloader CI
 on:
   push:
     branches: ["main"]
+    tags:
+      - "v*"
   pull_request:
     branches: ["main"]
 
@@ -26,6 +28,18 @@ jobs:
 
       - name: Run tests
         run: pytest -v
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/vector-config-reloader
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}},prefix=
+            type=sha,format=short,prefix=
+          flavor: |
+            latest=auto
 
   build-and-push:
     runs-on: ubuntu-latest
