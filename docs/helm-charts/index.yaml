@@ -2,17 +2,17 @@ apiVersion: v1
 entries:
   crusoe-telemetry-agent:
   - apiVersion: v2
-    created: "2025-10-05T03:22:09.389656869Z"
+    created: "2025-10-07T05:50:25.670834493Z"
     dependencies:
     - name: vector
       repository: https://helm.vector.dev
       version: 0.45.0
     description: Helm chart to deploy Crusoe telemetry agent and monitoring token
       job
-    digest: 653efa2231b3d97f0c4cd2c191399bff6ecd16c94b16147f9e4ba543ba37fd6e
+    digest: b499772eefd856bc2c97c9630623983ce666f3b69645510af02d25192429fa3d
     name: crusoe-telemetry-agent
     type: application
     urls:
     - https://crusoecloud.github.io/crusoe-telemetry-agent/helm-charts/crusoe-telemetry-agent-0.2.0.tgz
     version: 0.2.0
-generated: "2025-10-05T03:22:09.386541842Z"
+generated: "2025-10-07T05:50:25.666798074Z"
