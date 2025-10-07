@@ -29,18 +29,6 @@ jobs:
       - name: Run tests
         run: pytest -v
 
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository }}/vector-config-reloader
-          tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}},prefix=
-            type=sha,format=short,prefix=
-          flavor: |
-            latest=auto
-
   build-and-push:
     runs-on: ubuntu-latest
     needs: test   # only build if tests pass
@@ -62,15 +50,23 @@ jobs:
         id: vars
         run: echo "BRANCH_TAG=$(echo '${{ github.head_ref || github.ref_name }}' | tr '[:upper:]' '[:lower:]' | tr '/' '-')" >> $GITHUB_ENV
 
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/vector-config-reloader
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}},prefix=
+            type=sha,format=short,prefix=
+          flavor: |
+            latest=auto
+
       - name: Build and push image
         uses: docker/build-push-action@v5
         with:
           context: ./vector-config-reloader
           file: ./vector-config-reloader/Dockerfile
           push: true
-          tags: |
-            ghcr.io/${{ github.repository }}/vector-config-reloader:latest
-            ghcr.io/${{ github.repository }}/vector-config-reloader:${{ env.BRANCH_TAG }}
-          # optional: also tag with commit SHA
-          labels: |
-            org.opencontainers.image.source=${{ github.repository }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
