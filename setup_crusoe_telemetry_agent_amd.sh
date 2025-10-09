@@ -74,20 +74,7 @@ check_os_support() {
 }
 
 install_docker() {
-  status "Installing Docker using Docker apt repository."
-  # Prepare keyrings directory and add Docker GPG key
-  mkdir -p /etc/apt/keyrings
-  apt-get update && apt-get install -y ca-certificates curl gnupg || error_exit "Failed to install prerequisites for Docker."
-  curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc \
-    || error_exit "Failed to download Docker GPG key."
-  chmod a+r /etc/apt/keyrings/docker.asc
-
-  # Add Docker repository to apt sources
-  echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo \"${UBUNTU_CODENAME:-$VERSION_CODENAME}\") stable" \
-    > /etc/apt/sources.list.d/docker.list
-  apt-get update || error_exit "Failed to apt-get update after adding Docker repo."
-  apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin \
-    || error_exit "Failed to install Docker packages."
+  curl -fsSL https://get.docker.com | sh
 }
 
 # Compare semantic versions a.b.c >= x.y.z
