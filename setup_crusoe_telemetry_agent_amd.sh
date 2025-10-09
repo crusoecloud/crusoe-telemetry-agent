@@ -93,12 +93,16 @@ version_ge() {
   return 0
 }
 
-# Detect ROCm version using rocm-smi or version file
+# Detect ROCm version using apt metadata (no dpkg) or version file
 get_rocm_version() {
   local ver=""
-  if command_exists rocm-smi; then
-    # rocm-smi --showversion prints something like: ROCm Version: 6.2.0
-    ver=$(rocm-smi --showversion 2>/dev/null | sed -En 's/.*ROCm Version[: ]+([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' | head -n1)
+  if command_exists apt; then
+    # Prefer installed version if present
+    ver=$(apt show rocm-libs -a 2>/dev/null | sed -En 's/^Installed: ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' | head -n1)
+    # If not installed or missing Installed field, take the first Version line
+    if [[ -z "$ver" ]]; then
+      ver=$(apt show rocm-libs -a 2>/dev/null | sed -En 's/^Version: ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' | head -n1)
+    fi
   fi
   if [[ -z "$ver" ]] && [ -f "/opt/rocm/.info/version" ]; then
     ver=$(sed -En 's/^ROCM_VERSION=([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' /opt/rocm/.info/version | head -n1)
