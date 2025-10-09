@@ -1,6 +1,6 @@
 services:
   crusoe-vector:
-    image: timberio/vector:0.46.1-debian
+    image: timberio/vector:0.50.0-debian
     container_name: crusoe-vector
     hostname: crusoe-vector
     volumes:
@@ -9,6 +9,7 @@ services:
       - /sys:/host/sys:ro
     env_file:
       - ./.env
+      - /etc/crusoe/secrets/.monitoring-token
     environment:
       - PROCFS_ROOT=/host/proc
       - SYSFS_ROOT=/host/sys

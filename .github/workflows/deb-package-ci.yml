@@ -1,0 +1,189 @@
+name: Build and Release Debian Package
+
+on:
+  # Trigger the workflow on pushes to ANY branch
+  push:
+    branches:
+      - '**'
+    # BUT only run if changes occur under the vm/ path
+    paths:
+      - 'vm/**'
+  # Allow manual trigger
+  workflow_dispatch:
+
+env:
+  # The source directory containing the debian/ subdirectory and the files
+  PACKAGE_SOURCE_DIR: vm
+  # The name of the final package file
+  PACKAGE_NAME: crusoe-telemetry-agent
+
+jobs:
+  build_package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          # Fetch all history for accurate versioning/tagging
+          fetch-depth: 0
+
+      - name: Install Debian Packaging Tools
+        run: |
+          sudo apt-get update
+          # Install devscripts, debhelper, build-essential, and apt-utils for apt-ftparchive
+          sudo apt-get install -y devscripts debhelper build-essential apt-utils gnupg
+
+      - name: Remove redundant compat file
+        run: |
+          # The debhelper compat level is already defined in debian/control.
+          # We must remove the separate debian/compat file to avoid build errors.
+          rm -f ${PACKAGE_SOURCE_DIR}/debian/compat
+
+      - name: Get Package Version and Set Environment
+        id: versioning
+        run: |
+          # 1. Read base version from vm/VERSION
+          BASE_VERSION=$(cat ${PACKAGE_SOURCE_DIR}/VERSION | tr -d '[:space:]')
+          COMMIT_SHA_SHORT=$(git rev-parse --short HEAD)
+          
+          # 2. Determine version suffix based on branch
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            # Main branch uses clean version (e.g., 0.1.0)
+            DEB_VERSION="${BASE_VERSION}"
+            IS_RELEASE="true"
+          else
+            # All other branches use a dirty version with commit SHA (e.g., 0.1.0-gitf7e4a6d)
+            DEB_VERSION="${BASE_VERSION}-git${COMMIT_SHA_SHORT}"
+            IS_RELEASE="false"
+          fi
+          
+          echo "Base Version: $BASE_VERSION"
+          echo "Full Debian Version: $DEB_VERSION"
+          
+          # Set outputs/environment for subsequent steps
+          echo "IS_RELEASE=$IS_RELEASE" >> $GITHUB_ENV
+          echo "PACKAGE_VERSION=$DEB_VERSION" >> $GITHUB_ENV
+          # --- ARCHITECTURE CHANGE HERE ---
+          echo "DEB_FILE_NAME=${PACKAGE_NAME}_${DEB_VERSION}_all.deb" >> $GITHUB_ENV
+          # Set GPG Key ID for signing in publish_apt_repo
+          GPG_KEY_ID=$(gpg --no-tty --batch --import-asc-from-file <(echo "${{ secrets.APT_GPG_KEY }}") 2>&1 | awk '/key/ && /imported/ {print $NF}' | tail -n 1)
+          echo "GPG_KEY_ID=${GPG_KEY_ID}" >> $GITHUB_ENV
+
+      - name: Update DEBIAN/control and changelog with CI Version
+        run: |
+          CONTROL_FILE="${PACKAGE_SOURCE_DIR}/debian/control"
+          
+          # Update the Version field in the control file
+          sed -i "s/Version: .*/Version: ${PACKAGE_VERSION}/" "$CONTROL_FILE"
+          
+          # Update Architecture field to 'all'
+          sed -i 's/^Architecture: .*/Architecture: all/' "$CONTROL_FILE"
+          
+          # Update changelog (important for dpkg-buildpackage)
+          # Note: dch creates a new entry with the correct version/date
+          dch --changelog ${PACKAGE_SOURCE_DIR}/debian/changelog -v "${PACKAGE_VERSION}" "Automated build via GitHub Actions."
+          
+          echo "--- Updated Control ---"
+          cat "$CONTROL_FILE"
+          echo "--- Updated Changelog ---"
+          cat "${PACKAGE_SOURCE_DIR}/debian/changelog" | head -n 5
+
+      - name: Build the Debian Package
+        run: |
+          cd ${PACKAGE_SOURCE_DIR}
+          # -us -uc: Skip signing for binary build
+          dpkg-buildpackage -us -uc -b
+          
+          # Move the resulting .deb file to the root of the repository for easy access
+          # Find the generated file in the parent directory (../)
+          # The file created by dpkg-buildpackage uses the architecture defined in the control file ('all')
+          mv ../${PACKAGE_NAME}_${PACKAGE_VERSION}_all.deb ./${DEB_FILE_NAME}
+
+      - name: Upload Package as Artifact (For Testing)
+        # Using a fixed reference to resolve potential IDE indexing errors
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PACKAGE_NAME }}-${{ env.PACKAGE_VERSION }}
+          path: ${{ env.DEB_FILE_NAME }}
+          retention-days: 7
+
+      - name: Create GitHub Release and Upload .deb (Main Branch Only)
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.PACKAGE_VERSION }}
+          name: Release ${{ env.PACKAGE_VERSION }}
+          body: Official stable Debian package release for Crusoe Telemetry Agent.
+          files: ${{ env.DEB_FILE_NAME }}
+          draft: false
+          prerelease: false # Official Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    # Define an output so the next job can use the built package file name
+    outputs:
+      deb_filename: ${{ env.DEB_FILE_NAME }}
+
+  publish_apt_repo:
+    needs: build_package
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download built package artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build_package.outputs.deb_filename }}
+          path: ./temp_artifact/
+
+      - name: Setup GPG Environment
+        uses: crazy-max/ghaction-gpg@v4
+        with:
+          gpg_private_key: ${{ secrets.APT_GPG_KEY }}
+          passphrase: ${{ secrets.APT_GPG_PASSPHRASE }}
+
+      - name: Setup Repository Directory
+        run: |
+          # 1. Define repository structure
+          REPO_DIR="./repo"
+          # DIST_DIR now uses 'binary-all'
+          DIST_DIR="${REPO_DIR}/dists/stable/main/binary-all"
+          mkdir -p "$DIST_DIR"
+          
+          # 2. Move package into the repository path
+          mv ./temp_artifact/*.deb "$DIST_DIR/"
+          
+          # 3. Generate Packages.gz index file
+          cd "$REPO_DIR"
+          apt-ftparchive packages dists/stable/main/binary-all > dists/stable/main/binary-all/Packages
+          gzip -c dists/stable/main/binary-all/Packages > dists/stable/main/binary-all/Packages.gz
+          
+          # 4. Generate Release file
+          apt-ftparchive -o APT::FTPArchive::Release::Codename=stable \
+                       -o APT::FTPArchive::Release::Components=main \
+                       -o APT::FTPArchive::Release::Architectures=all \
+                       release dists/stable > dists/stable/Release
+          
+          # 5. Sign the Release file
+          gpg --batch --passphrase ${{ secrets.APT_GPG_PASSPHRASE }} \
+            --pinentry-mode loopback \
+            --sign -k 0x${{ env.GPG_KEY_ID }} \
+            --output dists/stable/InRelease \
+            --detach-sign dists/stable/Release
+          
+          # 6. Copy Public Key to root for easy discovery (optional but helpful)
+          gpg --armor --export ${{ env.GPG_KEY_ID }} > public.key
+          
+          # 7. Return to root for deployment
+          cd ..
+
+      - name: Deploy to GitHub Pages (main branch)
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./repo
+          publish_branch: main # Deploy to the main branch
+          destination_dir: docs # Deploy to the 'docs' subdirectory within the main branch
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
+          commit_message: "Automatic APT repository update for ${{ needs.build_package.outputs.deb_filename }}"

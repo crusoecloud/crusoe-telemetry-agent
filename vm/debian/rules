@@ -1,0 +1,17 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	# No build step needed - this is a script-based package
+
+override_dh_auto_install:
+	# Files are installed via debian/install file
+
+override_dh_installinit:
+	# systemd services are installed via postinst script
+	# to handle GPU vs CPU VM detection logic
+
+override_dh_auto_test:
+	# No tests to run

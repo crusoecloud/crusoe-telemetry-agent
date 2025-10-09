@@ -1,0 +1,9 @@
+crusoe-telemetry-agent (0.1.0-1) unstable; urgency=medium
+
+  * Initial Debian package release
+  * Split cta_manager.sh into proper Debian maintainer scripts
+  * Support for both GPU and CPU VMs
+  * Automatic DCGM upgrade for GPU VMs
+  * Decoupled Vector and DCGM Exporter systemd services
+
+ -- Crusoe Cloud <support@crusoecloud.com>  Fri, 10 Oct 2025 15:18:00 -0700

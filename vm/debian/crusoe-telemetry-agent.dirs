@@ -1,0 +1,6 @@
+etc/crusoe/telemetry_agent
+etc/crusoe/secrets
+usr/share/crusoe-telemetry-agent
+usr/share/crusoe-telemetry-agent/config
+usr/share/crusoe-telemetry-agent/docker
+usr/share/crusoe-telemetry-agent/systemctl
