@@ -10,7 +10,9 @@ GITHUB_BRANCH="main"
 # Define paths for config files within the GitHub repository
 REMOTE_VECTOR_CONFIG_AMD_GPU_VM="config/vector_amd_gpu_vm.yaml"
 REMOTE_DOCKER_COMPOSE_VECTOR="docker/docker-compose-vector.yaml"
+REMOTE_DOCKER_COMPOSE_AMD_EXPORTER_UBUNTU_24="docker/docker-compose-amd-exporter-ubuntu24.04.yaml"
 REMOTE_CRUSOE_TELEMETRY_SERVICE="systemctl/crusoe-telemetry-agent.service"
+REMOTE_CRUSOE_AMD_EXPORTER_SERVICE="systemctl/crusoe-amd-exporter.service"
 SYSTEMCTL_DIR="/etc/systemd/system"
 CRUSOE_TELEMETRY_AGENT_DIR="/etc/crusoe/telemetry_agent"
 CRUSOE_AUTH_TOKEN_LENGTH=82
@@ -166,6 +168,21 @@ wget -q -O "$CRUSOE_TELEMETRY_AGENT_DIR/vector.yaml" "$GITHUB_RAW_BASE_URL/$REMO
 
 status "Download Vector docker-compose file."
 wget -q -O "$CRUSOE_TELEMETRY_AGENT_DIR/docker-compose-vector.yaml" "$GITHUB_RAW_BASE_URL/$REMOTE_DOCKER_COMPOSE_VECTOR" || error_exit "Failed to download $REMOTE_DOCKER_COMPOSE_VECTOR"
+
+# Download AMD Exporter docker-compose and systemd unit, then enable/start service
+status "Download AMD Exporter docker-compose file."
+wget -q -O "$CRUSOE_TELEMETRY_AGENT_DIR/docker-compose-amd-exporter.yaml" "$GITHUB_RAW_BASE_URL/$REMOTE_DOCKER_COMPOSE_AMD_EXPORTER_UBUNTU_24" || error_exit "Failed to download $REMOTE_DOCKER_COMPOSE_AMD_EXPORTER_UBUNTU_24"
+
+status "Install crusoe-amd-exporter systemd unit."
+wget -q -O "$SYSTEMCTL_DIR/crusoe-amd-exporter.service" "$GITHUB_RAW_BASE_URL/$REMOTE_CRUSOE_AMD_EXPORTER_SERVICE" || error_exit "Failed to download $REMOTE_CRUSOE_AMD_EXPORTER_SERVICE"
+
+status "Enable and start systemd services for crusoe-amd-exporter."
+echo "systemctl daemon-reload"
+systemctl daemon-reload
+echo "systemctl enable crusoe-amd-exporter.service"
+systemctl enable crusoe-amd-exporter.service
+echo "systemctl start crusoe-amd-exporter.service"
+systemctl start crusoe-amd-exporter.service
 
 status "Fetching crusoe auth token."
 if [[ -z "$CRUSOE_AUTH_TOKEN" ]]; then
