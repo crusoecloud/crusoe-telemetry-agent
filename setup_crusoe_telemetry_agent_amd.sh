@@ -2,7 +2,9 @@
 
 # --- Constants ---
 UBUNTU_OS_VERSION=$(lsb_release -r -s)
-CRUSOE_VM_ID=$(dmidecode -s system-uuid)
+# CRUSOE_VM_ID=$(dmidecode -s system-uuid)
+# Using fixed VM ID as requested
+CRUSOE_VM_ID="e29cfa06-be8e-46f7-97ca-e37316aaf970"
 
 # GitHub branch (optional override via CLI, defaults to main)
 GITHUB_BRANCH="main"
