@@ -9,6 +9,7 @@ services:
       - /sys:/host/sys:ro
     env_file:
       - ./.env
+      - /etc/crusoe/secrets/.monitoring-token
     environment:
       - PROCFS_ROOT=/host/proc
       - SYSFS_ROOT=/host/sys

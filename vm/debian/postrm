@@ -1,0 +1,89 @@
+#!/bin/bash
+set -e
+
+# --- Constants ---
+SYSTEMCTL_DIR="/etc/systemd/system"
+CRUSOE_TELEMETRY_AGENT_DIR="/etc/crusoe/telemetry_agent"
+DEFAULT_DCGM_EXPORTER_SERVICE_NAME="crusoe-dcgm-exporter.service"
+DCGM_EXPORTER_SERVICE_NAME="${DCGM_EXPORTER_SERVICE_NAME:-$DEFAULT_DCGM_EXPORTER_SERVICE_NAME}"
+
+# --- Helper Functions ---
+
+service_exists() {
+  systemctl cat "$1" >/dev/null 2>&1
+}
+
+status() {
+  echo -e "\n\033[1m$1\033[0m"
+}
+
+# --- Main Post-removal Logic ---
+
+case "$1" in
+  purge)
+    status "Purging Crusoe Telemetry Agent configuration and data."
+    
+    # Disable and remove systemd services
+    if service_exists "crusoe-telemetry-agent.service"; then
+      systemctl disable crusoe-telemetry-agent.service || true
+    fi
+    
+    if service_exists "$DCGM_EXPORTER_SERVICE_NAME"; then
+      systemctl disable "$DCGM_EXPORTER_SERVICE_NAME" || true
+    fi
+    
+    # Remove systemd unit files
+    rm -f "$SYSTEMCTL_DIR/crusoe-telemetry-agent.service" || true
+    rm -f "$SYSTEMCTL_DIR/$DCGM_EXPORTER_SERVICE_NAME" || true
+    
+    # Reload systemd
+    systemctl daemon-reload || true
+    
+    # Remove configuration and runtime directories
+    rm -rf "$CRUSOE_TELEMETRY_AGENT_DIR" || true
+    
+    # Note: We intentionally do NOT remove /etc/crusoe/secrets/.monitoring-token
+    # to preserve the token across reinstallations. Users can manually delete
+    # /etc/crusoe/secrets/ if they want a complete cleanup.
+    
+    echo "Crusoe Telemetry Agent purged."
+    echo "Note: Monitoring token at /etc/crusoe/secrets/.monitoring-token was preserved."
+    echo "To completely remove all data, run: sudo rm -rf /etc/crusoe/secrets/"
+    ;;
+    
+  remove)
+    status "Removing Crusoe Telemetry Agent."
+    
+    # Disable services on remove (but keep configs for potential reinstall)
+    if service_exists "crusoe-telemetry-agent.service"; then
+      systemctl disable crusoe-telemetry-agent.service || true
+    fi
+    
+    if service_exists "$DCGM_EXPORTER_SERVICE_NAME"; then
+      systemctl disable "$DCGM_EXPORTER_SERVICE_NAME" || true
+    fi
+    
+    # Remove systemd unit files
+    rm -f "$SYSTEMCTL_DIR/crusoe-telemetry-agent.service" || true
+    rm -f "$SYSTEMCTL_DIR/$DCGM_EXPORTER_SERVICE_NAME" || true
+    
+    # Reload systemd
+    systemctl daemon-reload || true
+    
+    echo "Crusoe Telemetry Agent removed."
+    echo "Configuration preserved in $CRUSOE_TELEMETRY_AGENT_DIR"
+    echo "To completely remove, run: sudo apt purge crusoe-telemetry-agent"
+    ;;
+    
+  upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+    ;;
+    
+  *)
+    echo "postrm called with unknown argument \`$1'" >&2
+    exit 1
+    ;;
+esac
+
+#DEBHELPER#
+
+exit 0

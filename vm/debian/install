@@ -1,0 +1,8 @@
+config/vector_gpu_vm.yaml usr/share/crusoe-telemetry-agent/config/
+config/vector_cpu_vm.yaml usr/share/crusoe-telemetry-agent/config/
+config/dcp-metrics-included.csv usr/share/crusoe-telemetry-agent/config/
+docker/docker-compose-vector.yaml usr/share/crusoe-telemetry-agent/docker/
+docker/docker-compose-dcgm-exporter.yaml usr/share/crusoe-telemetry-agent/docker/
+systemctl/crusoe-telemetry-agent.service usr/share/crusoe-telemetry-agent/systemctl/
+systemctl/crusoe-dcgm-exporter.service usr/share/crusoe-telemetry-agent/systemctl/
+VERSION usr/share/crusoe-telemetry-agent/

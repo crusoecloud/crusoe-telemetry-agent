@@ -29,7 +29,7 @@ sinks:
         type: prometheus_remote_write
         inputs:
             - add_update_labels
-        endpoint: "https://cms-monitoring.crusoecloud.com/ingest"
+        endpoint: "${TELEMETRY_INGRESS_ENDPOINT}"
         auth:
             strategy: bearer
             token: "${CRUSOE_AUTH_TOKEN}"
@@ -38,7 +38,7 @@ sinks:
         request:
             concurrency: none
             rate_limit_duration_secs: 60
-            rate_limit_num: 1
+            rate_limit_num: 10
         compression: snappy
         tls:
             verify_certificate: true
