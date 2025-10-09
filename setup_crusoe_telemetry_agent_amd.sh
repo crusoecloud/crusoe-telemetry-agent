@@ -8,7 +8,7 @@ CRUSOE_VM_ID=$(dmidecode -s system-uuid)
 GITHUB_BRANCH="main"
 
 # Define paths for config files within the GitHub repository
-REMOTE_VECTOR_CONFIG_CPU_VM="config/vector_cpu_vm.yaml"
+REMOTE_VECTOR_CONFIG_AMD_GPU_VM="config/vector_amd_gpu_vm.yaml"
 REMOTE_DOCKER_COMPOSE_VECTOR="docker/docker-compose-vector.yaml"
 REMOTE_CRUSOE_TELEMETRY_SERVICE="systemctl/crusoe-telemetry-agent.service"
 SYSTEMCTL_DIR="/etc/systemd/system"
@@ -156,9 +156,9 @@ fi
 # Validate ROCm installation and version
 ensure_rocm_7_0_or_newer
 
-# Download Vector config (CPU baseline; AMD GPU scraping may be added separately)
-status "Download CPU Vector config."
-wget -q -O "$CRUSOE_TELEMETRY_AGENT_DIR/vector.yaml" "$GITHUB_RAW_BASE_URL/$REMOTE_VECTOR_CONFIG_CPU_VM" || error_exit "Failed to download $REMOTE_VECTOR_CONFIG_CPU_VM"
+# Download Vector config for AMD GPU VM (scrapes AMD exporter)
+status "Download AMD GPU Vector config."
+wget -q -O "$CRUSOE_TELEMETRY_AGENT_DIR/vector.yaml" "$GITHUB_RAW_BASE_URL/$REMOTE_VECTOR_CONFIG_AMD_GPU_VM" || error_exit "Failed to download $REMOTE_VECTOR_CONFIG_AMD_GPU_VM"
 
 status "Download Vector docker-compose file."
 wget -q -O "$CRUSOE_TELEMETRY_AGENT_DIR/docker-compose-vector.yaml" "$GITHUB_RAW_BASE_URL/$REMOTE_DOCKER_COMPOSE_VECTOR" || error_exit "Failed to download $REMOTE_DOCKER_COMPOSE_VECTOR"
@@ -182,6 +182,7 @@ status "Creating .env file with CRUSOE_AUTH_TOKEN and VM_ID."
 cat <<EOF > "$ENV_FILE"
 CRUSOE_AUTH_TOKEN='${CRUSOE_AUTH_TOKEN}'
 VM_ID='${CRUSOE_VM_ID}'
+AMD_EXPORTER_PORT='${AMD_EXPORTER_PORT:-5000}'
 EOF
 
 echo ".env file created at $ENV_FILE"
