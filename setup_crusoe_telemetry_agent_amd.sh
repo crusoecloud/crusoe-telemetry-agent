@@ -72,8 +72,9 @@ check_root() {
 }
 
 check_os_support() {
-  if [[ $UBUNTU_OS_VERSION != "24.04" ]]; then
-    error_exit "Ubuntu version $UBUNTU_OS_VERSION is not supported. Require 24.04."
+  # Require Ubuntu 22.04 or later
+  if ! version_ge "$UBUNTU_OS_VERSION" "22.04"; then
+    error_exit "Ubuntu version $UBUNTU_OS_VERSION is not supported. Require 22.04 or later."
   fi
 }
 
