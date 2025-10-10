@@ -13,6 +13,7 @@ REMOTE_DOCKER_COMPOSE_VECTOR="docker/docker-compose-vector.yaml"
 REMOTE_DOCKER_COMPOSE_AMD_EXPORTER="docker/docker-compose-amd-exporter.yaml"
 REMOTE_CRUSOE_TELEMETRY_SERVICE="systemctl/crusoe-telemetry-agent.service"
 REMOTE_CRUSOE_AMD_EXPORTER_SERVICE="systemctl/crusoe-amd-exporter.service"
+REMOTE_AMD_METRICS_CONFIG="config/amd_metrics_config.json"
 SYSTEMCTL_DIR="/etc/systemd/system"
 CRUSOE_TELEMETRY_AGENT_DIR="/etc/crusoe/telemetry_agent"
 CRUSOE_AUTH_TOKEN_LENGTH=82
@@ -171,6 +172,11 @@ status "Download Vector docker-compose file."
 wget -q -O "$CRUSOE_TELEMETRY_AGENT_DIR/docker-compose-vector.yaml" "$GITHUB_RAW_BASE_URL/$REMOTE_DOCKER_COMPOSE_VECTOR" || error_exit "Failed to download $REMOTE_DOCKER_COMPOSE_VECTOR"
 
 # Download AMD Exporter docker-compose and systemd unit, then enable/start service
+status "Prepare AMD metrics config directory."
+mkdir -p "$CRUSOE_TELEMETRY_AGENT_DIR/config" || error_exit "Failed to create $CRUSOE_TELEMETRY_AGENT_DIR/config"
+status "Download AMD metrics config.json."
+wget -q -O "$CRUSOE_TELEMETRY_AGENT_DIR/config/config.json" "$GITHUB_RAW_BASE_URL/$REMOTE_AMD_METRICS_CONFIG" || error_exit "Failed to download $REMOTE_AMD_METRICS_CONFIG"
+
 status "Download AMD Exporter docker-compose file."
 wget -q -O "$CRUSOE_TELEMETRY_AGENT_DIR/docker-compose-amd-exporter.yaml" "$GITHUB_RAW_BASE_URL/$REMOTE_DOCKER_COMPOSE_AMD_EXPORTER" || error_exit "Failed to download $REMOTE_DOCKER_COMPOSE_AMD_EXPORTER"
 
