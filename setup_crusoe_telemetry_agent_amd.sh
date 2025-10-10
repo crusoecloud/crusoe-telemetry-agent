@@ -114,17 +114,17 @@ get_rocm_version() {
   echo "$ver"
 }
 
-ensure_rocm_7_0_or_newer() {
-  status "Checking ROCm version (require 7.0.0 or newer)."
+ensure_rocm_6_2_or_newer() {
+  status "Checking ROCm version (require 6.2.0 or newer)."
   local ver
   ver=$(get_rocm_version)
   if [[ -z "$ver" ]]; then
-    error_exit "ROCm not detected. Please install ROCm 7.0.0 or newer and re-run this script."
+    error_exit "ROCm not detected. Please install ROCm 6.2.0 or newer and re-run this script."
   fi
-  if version_ge "$ver" "7.0.0"; then
+  if version_ge "$ver" "6.2.0"; then
     echo "Detected ROCm version: $ver (OK)"
   else
-    error_exit "Detected ROCm version $ver is older than required 7.0.0. Please upgrade ROCm and re-run."
+    error_exit "Detected ROCm version $ver is older than required 6.2.0. Please upgrade ROCm and re-run."
   fi
 }
 
@@ -162,7 +162,7 @@ if ! dir_exists "$CRUSOE_TELEMETRY_AGENT_DIR"; then
 fi
 
 # Validate ROCm installation and version
-ensure_rocm_7_0_or_newer
+ensure_rocm_6_2_or_newer
 
 # Download Vector config for AMD GPU VM (scrapes AMD exporter)
 status "Download AMD GPU Vector config."
