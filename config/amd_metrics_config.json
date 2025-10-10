@@ -1,4 +1,5 @@
 {
+  "_comment": "Config for AMD Device Metrics Exporter v1.4.0",
   "CommonConfig": {
     "HealthService": {
       "Enable": true
