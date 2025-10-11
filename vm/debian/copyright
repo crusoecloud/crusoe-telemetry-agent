@@ -1,0 +1,13 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: crusoe-telemetry-agent
+Upstream-Contact: Crusoe Cloud <support@crusoecloud.com>
+Source: https://github.com/crusoecloud/crusoe-telemetry-agent
+
+Files: *
+Copyright: 2025 Crusoe Cloud
+License: Apache-2.0 or MIT
+ Licensed under either of Apache License, Version 2.0 or MIT license
+ at your option.
+ .
+ On Debian systems, the complete text of the Apache License, Version 2.0
+ can be found in "/usr/share/common-licenses/Apache-2.0".
