@@ -151,7 +151,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           # Use the custom deploy key for authentication
-          token: ${{ secrets.ACTIONS_DEPLOY_KEY }}
+          token: ${{ secrets.REPO_PAT }}
           fetch-depth: 0
 
       - name: Download built package artifact
