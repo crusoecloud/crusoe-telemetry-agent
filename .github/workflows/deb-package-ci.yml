@@ -51,7 +51,7 @@ jobs:
           COMMIT_SHA_SHORT=$(git rev-parse --short HEAD)
           
           # 2. Determine version suffix based on branch
-          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+          if [[ "${{ github.ref }}" == "refs/heads/vm-agent-upgrade" ]]; then
             # Main branch uses clean version (e.g., 0.1.0)
             DEB_VERSION="${BASE_VERSION}"
             IS_RELEASE="true"
@@ -98,14 +98,24 @@ jobs:
           # -us -uc: Skip signing for binary build
           dpkg-buildpackage -us -uc -b
           
-          # Move the resulting .deb file to the current directory
+          # FIX: Move the resulting .deb file to the current directory (project root)
+          # The build puts the file in ../, so we move it back to the current directory (vm/)
           mv ../${PACKAGE_NAME}_${PACKAGE_VERSION}_all.deb ./
+          
+          # IMPORTANT: The remaining steps in this job run from the repository root, not vm/
+          # We must move the .deb file up to the repository root for the Release and Artifact steps
+          mv ./${PACKAGE_NAME}_${PACKAGE_VERSION}_all.deb ../
+          
+          # Return to repository root
+          cd ..
 
       - name: Upload Package as Artifact (For Testing)
         # Using a fixed reference to resolve potential IDE indexing errors
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.PACKAGE_NAME }}-${{ env.PACKAGE_VERSION }}
+          # FIX: Use the fixed file name as the artifact name
+          name: ${{ env.DEB_FILE_NAME }}
+          # FIX: The file is now located in the repository root (./)
           path: ./${{ env.DEB_FILE_NAME }}
           retention-days: 7
 
@@ -116,6 +126,7 @@ jobs:
           tag_name: v${{ env.PACKAGE_VERSION }}
           name: Release ${{ env.PACKAGE_VERSION }}
           body: Official stable Debian package release for Crusoe Telemetry Agent.
+          # FIX: The file is now located in the repository root (./)
           files: ./${{ env.DEB_FILE_NAME }}
           draft: false
           prerelease: false # Official Release
@@ -137,13 +148,20 @@ jobs:
       id-token: write # Required for modern OIDC deployments
     # -----------------------------
     steps:
+      - name: Checkout Code (Needed to deploy to main/docs)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Download built package artifact
         uses: actions/download-artifact@v4
         with:
+          # FIX: The download name now matches the upload name
           name: ${{ needs.build_package.outputs.deb_filename }}
           path: ./temp_artifact/
 
       - name: Setup GPG Environment
+        # Corrected action reference to a working version
         uses: crazy-max/ghaction-import-gpg@v6
         with:
           gpg_private_key: ${{ secrets.APT_GPG_KEY }}
