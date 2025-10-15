@@ -7,7 +7,7 @@ on:
       - '**'
     # BUT only run if changes occur under the vm/ path
     paths:
-      - '*'
+      - 'vm/**'
   # Allow manual trigger
   workflow_dispatch:
 
@@ -108,7 +108,7 @@ jobs:
           retention-days: 7
 
       - name: Create GitHub Release and Upload .deb (Main Branch Only)
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/vm-agent-upgrade'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.PACKAGE_VERSION }}
