@@ -1,0 +1,53 @@
+sources:
+    host_metrics:
+        type: host_metrics
+        collectors:
+            - cpu
+            - disk
+            - memory
+            - network
+        network:
+          devices:
+            excludes:
+              - "lo*"
+            includes:
+              - "ens*"
+        scrape_interval_secs: 60
+
+    dcgm_metrics:
+        type: prometheus_scrape
+        endpoints:
+            - http://localhost:9400/metrics
+        scrape_interval_secs: 60
+        scrape_timeout_secs: 50
+
+transforms:
+    add_update_labels:
+        type: remap
+        inputs:
+            - host_metrics
+            - dcgm_metrics
+        source: |
+            del(.tags.Hostname)
+            .tags.vm_id = "${VM_ID}"
+            .tags.crusoe_resource = "vm"
+
+sinks:
+    cms_gateway:
+        type: prometheus_remote_write
+        inputs:
+            - add_update_labels
+        endpoint: "https://cms-monitoring.crusoecloud.com/ingest"
+        auth:
+            strategy: bearer
+            token: "${CRUSOE_AUTH_TOKEN}"
+        healthcheck:
+            enabled: false
+        request:
+            concurrency: none
+            rate_limit_duration_secs: 60
+            rate_limit_num: 10
+        compression: snappy
+        tls:
+            verify_certificate: true
+            verify_hostname: true
