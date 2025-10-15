@@ -171,7 +171,7 @@ jobs:
       - name: Set GPG Key ID Environment Variable
         run: |
           # Use the output from the GPG action step
-          echo "GPG_KEY_ID=${{ steps.gpg_setup.outputs.gpg_key_id }}" >> $GITHUB_ENV
+          echo "GPG_KEY_ID=${{ steps.gpg_setup.outputs.keyid }}" >> $GITHUB_ENV
 
       - name: Setup Repository Directory
         env:
