@@ -1,0 +1,62 @@
+crusoe-telemetry-agent for Debian
+---------------------------------
+
+This package provides the Crusoe Cloud Telemetry Agent for monitoring
+virtual machines.
+
+Configuration
+-------------
+
+The telemetry agent requires a Crusoe monitoring token to function.
+You can configure it in one of the following ways:
+
+1. Set the CRUSOE_AUTH_TOKEN environment variable before installation:
+   export CRUSOE_AUTH_TOKEN="your-82-character-token"
+   sudo -E apt install ./crusoe-telemetry-agent_*.deb
+
+2. Manually create the token file after installation:
+   echo 'CRUSOE_AUTH_TOKEN=your-82-character-token' | \
+     sudo tee /etc/crusoe/secrets/.monitoring-token
+   sudo chmod 600 /etc/crusoe/secrets/.monitoring-token
+   sudo systemctl restart crusoe-telemetry-agent.service
+
+To create a monitoring token, use the Crusoe CLI:
+   crusoe monitoring tokens create
+
+Environment Configuration
+-------------------------
+
+By default, the package is configured for production environment.
+To use a different environment (dev, staging), set the CRUSOE_ENVIRONMENT
+variable before installation:
+   export CRUSOE_ENVIRONMENT="staging"
+   sudo -E dpkg -i crusoe-telemetry-agent_*.deb
+
+GPU Support
+-----------
+
+On GPU VMs, the package will automatically:
+- Detect NVIDIA GPUs
+- Upgrade DCGM if needed (from v3 to v4)
+- Install and start the DCGM Exporter service
+- Configure GPU-specific metrics collection
+
+Services
+--------
+
+The package installs the following systemd services:
+- crusoe-telemetry-agent.service (Vector - all VMs)
+- crusoe-dcgm-exporter.service (DCGM Exporter - GPU VMs only)
+
+Check service status:
+   sudo systemctl status crusoe-telemetry-agent.service
+   sudo systemctl status crusoe-dcgm-exporter.service  # GPU VMs only
+
+Files
+-----
+
+Configuration: /etc/crusoe/telemetry_agent/
+Secrets: /etc/crusoe/secrets/
+Package data: /usr/share/crusoe-telemetry-agent/
+
+ -- Crusoe Cloud <support@crusoecloud.com>  Fri, 10 Oct 2025 15:18:00 -0700

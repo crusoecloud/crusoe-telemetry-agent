@@ -1,0 +1,48 @@
+#!/bin/bash
+set -e
+
+# --- Constants ---
+DEFAULT_DCGM_EXPORTER_SERVICE_NAME="crusoe-dcgm-exporter.service"
+DCGM_EXPORTER_SERVICE_NAME="${DCGM_EXPORTER_SERVICE_NAME:-$DEFAULT_DCGM_EXPORTER_SERVICE_NAME}"
+
+# --- Helper Functions ---
+
+service_exists() {
+  systemctl cat "$1" >/dev/null 2>&1
+}
+
+status() {
+  echo -e "\n\033[1m$1\033[0m"
+}
+
+# --- Main Pre-removal Logic ---
+
+case "$1" in
+  remove|upgrade|deconfigure)
+    status "Stopping Crusoe Telemetry Agent services."
+    
+    # Stop Vector service
+    if service_exists "crusoe-telemetry-agent.service"; then
+      echo "Stopping crusoe-telemetry-agent.service..."
+      systemctl stop crusoe-telemetry-agent.service || true
+    fi
+    
+    # Stop DCGM Exporter service if it was installed by this package
+    if service_exists "$DCGM_EXPORTER_SERVICE_NAME"; then
+      echo "Stopping $DCGM_EXPORTER_SERVICE_NAME..."
+      systemctl stop "$DCGM_EXPORTER_SERVICE_NAME" || true
+    fi
+    ;;
+    
+  failed-upgrade)
+    ;;
+    
+  *)
+    echo "prerm called with unknown argument \`$1'" >&2
+    exit 1
+    ;;
+esac
+
+#DEBHELPER#
+
+exit 0

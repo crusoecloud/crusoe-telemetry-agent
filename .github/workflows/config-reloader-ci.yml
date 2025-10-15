@@ -5,6 +5,9 @@ on:
     branches: ["main"]
     tags:
       - "v*"
+    # BUT only run if changes occur under the vector-config-reloader/ path
+    paths:
+      - 'vector-config-reloader/**'
   pull_request:
     branches: ["main"]
 

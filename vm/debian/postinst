@@ -1,0 +1,248 @@
+#!/bin/bash
+set -e
+
+# --- Constants ---
+UBUNTU_OS_VERSION=$(lsb_release -r -s)
+CRUSOE_VM_ID=$(dmidecode -s system-uuid)
+
+# Crusoe environment (can be overridden via debconf or env var)
+ENVIRONMENT="${CRUSOE_ENVIRONMENT:-prod}"
+
+# Define paths
+PACKAGE_DATA_DIR="/usr/share/crusoe-telemetry-agent"
+SYSTEMCTL_DIR="/etc/systemd/system"
+CRUSOE_TELEMETRY_AGENT_DIR="/etc/crusoe/telemetry_agent"
+CRUSOE_AUTH_TOKEN_LENGTH=82
+ENV_FILE="$CRUSOE_TELEMETRY_AGENT_DIR/.env"
+CRUSOE_SECRETS_DIR="/etc/crusoe/secrets"
+CRUSOE_MONITORING_TOKEN_FILE="$CRUSOE_SECRETS_DIR/.monitoring-token"
+INSTALLED_VERSION_FILE="$CRUSOE_TELEMETRY_AGENT_DIR/VERSION"
+
+# Optional parameters with defaults
+DEFAULT_DCGM_EXPORTER_SERVICE_NAME="crusoe-dcgm-exporter.service"
+DCGM_EXPORTER_SERVICE_NAME="${DCGM_EXPORTER_SERVICE_NAME:-$DEFAULT_DCGM_EXPORTER_SERVICE_NAME}"
+DCGM_EXPORTER_SERVICE_PORT="${DCGM_EXPORTER_SERVICE_PORT:-9400}"
+
+# dcgm-exporter docker image version map
+declare -A -r DCGM_EXPORTER_VERSION_MAP=(
+  ["20.04"]="4.3.1-4.4.0-ubi9"
+  ["22.04"]="4.3.1-4.4.0-ubuntu22.04"
+  ["24.04"]="4.3.1-4.4.0-ubi9"
+)
+
+# environment to crusoe Ingress endpoint Map
+declare -A -r TELEMETRY_INGRESS_MAP=(
+  ["dev"]="https://cms-monitoring.crusoecloud.xyz/ingest"
+  ["staging"]="https://cms-monitoring.crusoecloud.site/ingest"
+  ["prod"]="https://cms-monitoring.crusoecloud.com/ingest"
+)
+
+# --- Helper Functions ---
+
+command_exists() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+service_exists() {
+  systemctl cat "$1" >/dev/null 2>&1
+}
+
+error_exit() {
+  echo "Error: $1" >&2
+  exit 1
+}
+
+status() {
+  echo -e "\n\033[1m$1\033[0m"
+}
+
+validate_token() {
+  local token="$1"
+  [[ ${#token} -eq $CRUSOE_AUTH_TOKEN_LENGTH ]]
+}
+
+write_token_to_secrets() {
+  local token="$1"
+  mkdir -p "$CRUSOE_SECRETS_DIR" || true
+  echo "CRUSOE_AUTH_TOKEN=${token}" > "$CRUSOE_MONITORING_TOKEN_FILE"
+  chmod 600 "$CRUSOE_MONITORING_TOKEN_FILE" || true
+}
+
+check_os_support() {
+  local os_version_supported=0
+  for supported_version in "${!DCGM_EXPORTER_VERSION_MAP[@]}"; do
+    if [[ "$UBUNTU_OS_VERSION" == "$supported_version" ]]; then
+      os_version_supported=1
+      break
+    fi
+  done
+  if [[ $os_version_supported -eq 0 ]]; then
+    error_exit "Ubuntu version $UBUNTU_OS_VERSION is not supported."
+  fi
+}
+
+upgrade_dcgm() {
+  status "Checking DCGM version for upgrade."
+  
+  local dcgm_version_raw=$(dcgmi --version | grep 'version:' | awk '{print $3}' | cut -d'.' -f1)
+  local dcgm_version_major=${dcgm_version_raw:0:1}
+  
+  if [[ "$dcgm_version_major" -lt 4 ]]; then
+    status "Current DCGM version ($dcgm_version_major.x.x) is older than 4.x.x. Upgrading DCGM."
+    
+    # Stop DCGM service
+    systemctl --now disable nvidia-dcgm || error_exit "Failed to disable and stop nvidia-dcgm service."
+    
+    # Purge old packages
+    dpkg --list datacenter-gpu-manager &> /dev/null && apt purge --yes datacenter-gpu-manager
+    dpkg --list datacenter-gpu-manager-config &> /dev/null && apt purge --yes datacenter-gpu-manager-config
+    
+    # Update package lists
+    apt-get update || error_exit "Failed to update package lists."
+    
+    # Get CUDA version
+    if ! command_exists nvidia-smi; then
+      error_exit "nvidia-smi not found. Cannot determine CUDA version for DCGM upgrade."
+    fi
+    local CUDA_VERSION=$(nvidia-smi -q | sed -E -n 's/CUDA Version[ :]+([0-9]+)[.].*/\1/p')
+    
+    if [[ -z "$CUDA_VERSION" ]]; then
+      error_exit "Could not determine CUDA version. DCGM upgrade aborted."
+    fi
+    echo "Found CUDA Version: $CUDA_VERSION"
+    
+    # Install new DCGM package
+    apt-get install --yes --install-recommends "datacenter-gpu-manager-4-cuda${CUDA_VERSION}" || error_exit "Failed to install datacenter-gpu-manager-4-cuda${CUDA_VERSION}."
+    
+    # Enable and start the new service
+    systemctl --now enable nvidia-dcgm || error_exit "Failed to enable and start nvidia-dcgm service."
+    
+    status "DCGM upgrade complete."
+  else
+    echo "DCGM version is already 4.x.x or newer. No upgrade needed."
+  fi
+}
+
+# --- Main Installation Logic ---
+
+case "$1" in
+  configure)
+    status "Configuring Crusoe Telemetry Agent."
+    
+    # Ensure docker is installed
+    if ! command_exists docker; then
+      error_exit "Docker is required but not installed. Please install docker.io or docker-ce package."
+    fi
+    
+    # Create telemetry agent runtime directory
+    status "Creating telemetry agent runtime directory."
+    mkdir -p "$CRUSOE_TELEMETRY_AGENT_DIR"
+    
+    # Detect NVIDIA GPUs
+    HAS_NVIDIA_GPUS=false
+    if command_exists nvidia-smi && nvidia-smi -L >/dev/null 2>&1; then
+      HAS_NVIDIA_GPUS=true
+    fi
+    
+    if $HAS_NVIDIA_GPUS; then
+      status "GPU detected - configuring GPU monitoring."
+      
+      # Ensure NVIDIA dependencies exist
+      if command_exists dcgmi && command_exists nvidia-ctk; then
+        echo "Required NVIDIA dependencies are already installed."
+        upgrade_dcgm
+      else
+        error_exit "Please make sure NVIDIA dependencies (dcgm & nvidia-ctk) are installed and try again."
+      fi
+      
+      check_os_support
+      
+      # Copy GPU-specific configs
+      status "Installing GPU Vector config."
+      cp "$PACKAGE_DATA_DIR/config/dcp-metrics-included.csv" "$CRUSOE_TELEMETRY_AGENT_DIR/"
+      cp "$PACKAGE_DATA_DIR/config/vector_gpu_vm.yaml" "$CRUSOE_TELEMETRY_AGENT_DIR/vector.yaml"
+      cp "$PACKAGE_DATA_DIR/docker/docker-compose-dcgm-exporter.yaml" "$CRUSOE_TELEMETRY_AGENT_DIR/"
+      
+      # Install DCGM Exporter systemd service if it doesn't exist
+      if ! service_exists "$DCGM_EXPORTER_SERVICE_NAME"; then
+        status "Installing $DCGM_EXPORTER_SERVICE_NAME systemd unit."
+        cp "$PACKAGE_DATA_DIR/systemctl/crusoe-dcgm-exporter.service" "$SYSTEMCTL_DIR/$DCGM_EXPORTER_SERVICE_NAME"
+      else
+        echo "$DCGM_EXPORTER_SERVICE_NAME already exists. Skipping service installation."
+      fi
+    else
+      status "CPU-only VM detected - configuring CPU monitoring."
+      cp "$PACKAGE_DATA_DIR/config/vector_cpu_vm.yaml" "$CRUSOE_TELEMETRY_AGENT_DIR/vector.yaml"
+    fi
+    
+    # Copy Vector docker-compose file
+    status "Installing Vector docker-compose file."
+    cp "$PACKAGE_DATA_DIR/docker/docker-compose-vector.yaml" "$CRUSOE_TELEMETRY_AGENT_DIR/"
+    
+    # Handle Crusoe auth token
+    status "Ensuring Crusoe auth token in secrets."
+    if [[ -n "$CRUSOE_AUTH_TOKEN" ]] && validate_token "$CRUSOE_AUTH_TOKEN"; then
+      # Env var provided; write/overwrite secrets store
+      write_token_to_secrets "$CRUSOE_AUTH_TOKEN"
+    elif [[ -s "$CRUSOE_MONITORING_TOKEN_FILE" ]]; then
+      echo "Detected existing token file at $CRUSOE_MONITORING_TOKEN_FILE"
+    else
+      echo "WARNING: No Crusoe monitoring token found."
+      echo "Please set the token using one of the following methods:"
+      echo "  1. Run: echo 'CRUSOE_AUTH_TOKEN=<your-token>' > $CRUSOE_MONITORING_TOKEN_FILE"
+      echo "  2. Set CRUSOE_AUTH_TOKEN environment variable before reconfiguring the package"
+      echo ""
+      echo "To create a token, use: crusoe monitoring tokens create"
+      echo ""
+      echo "After setting the token, restart the service:"
+      echo "  sudo systemctl restart crusoe-telemetry-agent.service"
+    fi
+    
+    # Create .env file
+    status "Creating .env file with VM_ID and DCGM_EXPORTER_PORT."
+    cat <<EOF > "$ENV_FILE"
+VM_ID='${CRUSOE_VM_ID}'
+DCGM_EXPORTER_PORT='${DCGM_EXPORTER_SERVICE_PORT}'
+DCGM_EXPORTER_IMAGE_VERSION='${DCGM_EXPORTER_VERSION_MAP[$UBUNTU_OS_VERSION]}'
+TELEMETRY_INGRESS_ENDPOINT='${TELEMETRY_INGRESS_MAP[$ENVIRONMENT]}'
+EOF
+    echo ".env file created at $ENV_FILE"
+    
+    # Install Vector systemd service
+    status "Installing crusoe-telemetry-agent.service."
+    cp "$PACKAGE_DATA_DIR/systemctl/crusoe-telemetry-agent.service" "$SYSTEMCTL_DIR/"
+    
+    # Install VERSION file
+    cp "$PACKAGE_DATA_DIR/VERSION" "$INSTALLED_VERSION_FILE"
+    
+    # Reload systemd and enable services
+    status "Enabling and starting systemd services."
+    systemctl daemon-reload
+    
+    if $HAS_NVIDIA_GPUS && service_exists "$DCGM_EXPORTER_SERVICE_NAME"; then
+      systemctl enable "$DCGM_EXPORTER_SERVICE_NAME"
+      systemctl start "$DCGM_EXPORTER_SERVICE_NAME" || true
+    fi
+    
+    systemctl enable crusoe-telemetry-agent.service
+    systemctl start crusoe-telemetry-agent.service || true
+    
+    status "Crusoe Telemetry Agent installation complete!"
+    if $HAS_NVIDIA_GPUS; then
+      echo "Check status of $DCGM_EXPORTER_SERVICE_NAME: 'sudo systemctl status $DCGM_EXPORTER_SERVICE_NAME'"
+    fi
+    echo "Check status of crusoe-telemetry-agent service: 'sudo systemctl status crusoe-telemetry-agent.service'"
+    ;;
+    
+  abort-upgrade|abort-remove|abort-deconfigure)
+    ;;
+    
+  *)
+    echo "postinst called with unknown argument \`$1'" >&2
+    exit 1
+    ;;
+esac
+
+#DEBHELPER#
+
+exit 0
