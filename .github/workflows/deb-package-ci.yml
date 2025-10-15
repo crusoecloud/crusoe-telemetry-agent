@@ -126,7 +126,7 @@ jobs:
 
   publish_apt_repo:
     needs: build_package
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/vm-agent-upgrade'
     runs-on: ubuntu-latest
 
     steps:
