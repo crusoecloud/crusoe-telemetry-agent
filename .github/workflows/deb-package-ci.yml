@@ -69,9 +69,8 @@ jobs:
           echo "PACKAGE_VERSION=$DEB_VERSION" >> $GITHUB_ENV
           # Set architecture to 'all'
           echo "DEB_FILE_NAME=${PACKAGE_NAME}_${DEB_VERSION}_all.deb" >> $GITHUB_ENV
-          # Set GPG Key ID for signing in publish_apt_repo
-          GPG_KEY_ID=$(gpg --no-tty --batch --import-asc-from-file <(echo "${{ secrets.APT_GPG_KEY }}") 2>&1 | awk '/key/ && /imported/ {print $NF}' | tail -n 1)
-          echo "GPG_KEY_ID=${GPG_KEY_ID}" >> $GITHUB_ENV
+          # Note: GPG_KEY_ID extraction removed from here. It will be handled in the next job.
+
 
       - name: Update DEBIAN/control and changelog with CI Version
         run: |
@@ -161,11 +160,18 @@ jobs:
           path: ./temp_artifact/
 
       - name: Setup GPG Environment
+        id: gpg_setup # Give this step an ID to reference its output
         # Corrected action reference to a working version
         uses: crazy-max/ghaction-import-gpg@v6
         with:
           gpg_private_key: ${{ secrets.APT_GPG_KEY }}
           passphrase: ${{ secrets.APT_GPG_PASSPHRASE }}
+
+      # Step to explicitly set the GPG Key ID in the environment
+      - name: Set GPG Key ID Environment Variable
+        run: |
+          # Use the output from the GPG action step
+          echo "GPG_KEY_ID=${{ steps.gpg_setup.outputs.gpg_key_id }}" >> $GITHUB_ENV
 
       - name: Setup Repository Directory
         run: |
@@ -190,13 +196,20 @@ jobs:
                        release dists/stable > dists/stable/Release
           
           # 5. Sign the Release file
+          # FIX: Reference GPG_KEY_ID from the environment variable
           gpg --batch --passphrase ${{ secrets.APT_GPG_PASSPHRASE }} \
             --pinentry-mode loopback \
-            --sign -k 0x${{ env.GPG_KEY_ID }} \
-            --output dists/stable/InRelease \
+            --default-key ${{ env.GPG_KEY_ID }} \
             --detach-sign dists/stable/Release
           
+          # Create InRelease file (signed inline)
+          gpg --batch --passphrase ${{ secrets.APT_GPG_PASSPHRASE }} \
+            --pinentry-mode loopback \
+            --default-key ${{ env.GPG_KEY_ID }} \
+            --clearsign --output dists/stable/InRelease dists/stable/Release
+
           # 6. Copy Public Key to root for easy discovery
+          # FIX: Reference GPG_KEY_ID from the environment variable
           gpg --armor --export ${{ env.GPG_KEY_ID }} > public.key
           
           # 7. Return to root for deployment
