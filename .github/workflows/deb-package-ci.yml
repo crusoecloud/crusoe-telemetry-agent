@@ -231,7 +231,7 @@ jobs:
         uses: peaceiris/actions-gh-pages@v3
         with:
           # FIX: Use the custom deploy key for deployment authentication
-          github_token: ${{ secrets.ACTIONS_DEPLOY_KEY }}
+          github_token: ${{ secrets.REPO_PAT }}
           publish_dir: ./repo
           publish_branch: main # Deploy to the main branch
           destination_dir: docs # Deploy to the 'docs' subdirectory within the main branch
