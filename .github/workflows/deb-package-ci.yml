@@ -7,7 +7,7 @@ on:
       - '**'
     # BUT only run if changes occur under the vm/ path
     paths:
-      - 'vm/**'
+      - '*'
   # Allow manual trigger
   workflow_dispatch:
 
