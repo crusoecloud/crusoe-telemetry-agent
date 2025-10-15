@@ -144,7 +144,7 @@ jobs:
           path: ./temp_artifact/
 
       - name: Setup GPG Environment
-        uses: crazy-max/ghaction-gpg@v6
+        uses: crazy-max/ghaction-import-gpg@v6
         with:
           gpg_private_key: ${{ secrets.APT_GPG_KEY }}
           passphrase: ${{ secrets.APT_GPG_PASSPHRASE }}
