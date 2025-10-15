@@ -1,0 +1,39 @@
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA512
+
+Architectures: all
+Codename: stable
+Components: main
+Date: Wed, 15 Oct 2025 18:54:22 +0000
+MD5Sum:
+ 50db916d84add8abefba52c8085d22ec               91 Release
+ 17841c36a9eaa5335604499688937ca9             1041 main/binary-all/Packages
+ 0ee165ee3d0117d6c0f5e28ddc8c47a4              676 main/binary-all/Packages.gz
+SHA1:
+ 05188491a4c9f46e70c5038ad73cc1552eec0475               91 Release
+ dfe2b7d449e8df0f643d93f5dbc51c66e62bc611             1041 main/binary-all/Packages
+ 8c5b3e3cdc22f70c4c799c693df6c2d7cb0f38d5              676 main/binary-all/Packages.gz
+SHA256:
+ 3f46f5d58a82d39cca5943db1d368d64fad65c3c2a72aa4dc9fe9d4b1fd4af84               91 Release
+ 76682d731a2fe1c432d5a23f4d0e225a650f8c1df0bfb26f6f0d3721be51724b             1041 main/binary-all/Packages
+ 8564a0b093c9ee98525315aa2f4bd85af39174dfe05a8b03811fc7293a38e137              676 main/binary-all/Packages.gz
+SHA512:
+ 1ed10a3d1e77ba0528e5d25c7c84995e1cb9df9d3f0d5bd3c52d4ffe802989435a416ed94a48d51be3a0a0c0cb2bf58686870751e1f78fddbd49e893b6cc5cb9               91 Release
+ c22e4dd5361b55a2a98d5da3a488dfb5c7f26de01a58d5d7d21cdc9cf6f12738abda6289295473e0e75146940043156485c45e71d6f2d801950ec704eb26a60c             1041 main/binary-all/Packages
+ 91b80df45138904882abb74a368d39aba00067e9b4f8a1bb23b953e723299e89d94c2b165a68adf0f30840eecde2513ab0b151e7dae390e481abe3e9dfe8fabf              676 main/binary-all/Packages.gz
+-----BEGIN PGP SIGNATURE-----
+
+iQIzBAEBCgAdFiEErP546BNlNiZdwNbD02+7FkKqb2wFAmjv7d8ACgkQ02+7FkKq
+b2zQ6Q//YtXiC3XahVRpH1I7XKhDDyOQLYa4gL+IC/MtK5ngCZyEUJn/AH/0uYzz
+4XnkOdrxy2AwwbvHyHFRcAcWZdUkf4kE0hMz28RZwOavFYiPsrgp6gewgRDPr13i
+dbMK4nGobbGZAMYPtcrQccYMP6aJZrjuS/NT/wdMEHdcynCpGgoRUlEyFjBOsKtx
+NytMzikbNLqKuLekdfsVQ89J4I9fOt9cFca3MCuxaTDocxK6vWaZFGZAu+foHtuy
+VwlXuLgCZh24CKNyePUmDlEfmxWeaMRtBYjPfdqzk9x0sMast3p7ZDYcrkHaxLnZ
+n1BPK0IZCbQkpYyEmOZsk5m1NtjqsL22KDGUlo8HprJpo/DY68+nedrOIO2JgAFs
++B84v0BmsFGGD9s102Ho4XWrXdQR6Na2RfID4XSPpwnitMcXd/SBI1nhE/if+uWg
+z2wpWhf17N4zBzcT0+ktgj7bPFA/1CaS3AzVKyhpA8YA/pttPN5OW9bWNj6Wrp47
+waXQwFWjc7GYdeRigkkemV1PMvdooTTIWyyXRBGo4UndbiWxvdOblMPZY0W2P443
+OQTdJD7BZmez6eTpDVXAOvCGFv1XVpV4PLNkozqUsFfJZBbOBOiGgh7vmP4bTpOj
+UuVmeWAkDGBXJOh6v2eiOBGTKG0Ypt5JqbFRLysGU+Cw95+BIwU=
+=toSw
+-----END PGP SIGNATURE-----

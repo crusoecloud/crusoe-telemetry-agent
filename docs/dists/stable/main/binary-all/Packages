@@ -1,0 +1,23 @@
+Package: crusoe-telemetry-agent
+Architecture: all
+Version: 0.1.13
+Priority: optional
+Section: admin
+Maintainer: Crusoe Cloud <support@crusoecloud.com>
+Installed-Size: 47
+Depends: docker.io | docker-ce, wget, dmidecode, lsb-release
+Recommends: nvidia-utils, datacenter-gpu-manager
+Filename: dists/stable/main/binary-all/crusoe-telemetry-agent_0.1.13_all.deb
+Size: 8956
+MD5sum: 03d9a724f27efa574902626146e7010f
+SHA1: 92683789a05faab6b7ca445b147671da1304258d
+SHA256: e90759707f82609b10fc393b7a2746c1b165ef354faceaf8c2c7b1aa377652e9
+SHA512: e347ea0253a65f5bade1fbd1ded2ddec776cfae4f3e529e7ea9e7d1c16afa2c3d5820b48ab2dde6c76b8f3e802b5e7f6be857d90e753cc9637ff72ad431fc740
+Homepage: https://github.com/crusoecloud/crusoe-telemetry-agent
+Description: Crusoe Cloud Telemetry Agent
+ Telemetry agent for Crusoe Cloud VMs that collects and forwards
+ system metrics using Vector and DCGM Exporter (for GPU VMs).
+ .
+ This package installs and configures the necessary Docker containers
+ and systemd services for monitoring Crusoe Cloud virtual machines.
+
