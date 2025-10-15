@@ -150,6 +150,8 @@ jobs:
       - name: Checkout Code (Needed to deploy to main/docs)
         uses: actions/checkout@v4
         with:
+          # Use the custom deploy key for authentication
+          token: ${{ secrets.ACTIONS_DEPLOY_KEY }}
           fetch-depth: 0
 
       - name: Download built package artifact
@@ -228,7 +230,8 @@ jobs:
       - name: Deploy to GitHub Pages (docs folder on main branch)
         uses: peaceiris/actions-gh-pages@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          # FIX: Use the custom deploy key for deployment authentication
+          github_token: ${{ secrets.ACTIONS_DEPLOY_KEY }}
           publish_dir: ./repo
           publish_branch: main # Deploy to the main branch
           destination_dir: docs # Deploy to the 'docs' subdirectory within the main branch
