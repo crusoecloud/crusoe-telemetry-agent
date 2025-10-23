@@ -8,6 +8,7 @@ RELOADER_CONFIG_PATH = "/etc/reloader/config.yaml"
 
 DCGM_EXPORTER_SOURCE_NAME = "dcgm_exporter_scrape"
 DCGM_EXPORTER_APP_LABEL = "nvidia-dcgm-exporter"
+DATA_API_GATEWAY_APP_LABEL = "data-api-gateway"
 NODE_METRICS_VECTOR_TRANSFORM_NAME = "enrich_node_metrics"
 NODE_METRICS_VECTOR_TRANSFORM_SOURCE = LiteralStr("""
 if exists(.tags.Hostname) {
@@ -44,6 +45,14 @@ nodepool_id_parts, _ = slice(prefix_parts, 0, length(prefix_parts) - 1)
 .tags.cluster_id = "${CRUSOE_CLUSTER_ID}"
 .tags.vm_id = "${VM_ID}"
 .tags.crusoe_resource = "custom_metrics"
+""")
+}
+DATA_API_GATEWAY_METRICS_VECTOR_TRANSFORM = {
+    "type": "remap",
+    "inputs": [],
+    "source": LiteralStr("""
+.tags.vm_id = "${VM_ID}"
+.tags.crusoe_resource = "pt_metrics"
 """)
 }
 
@@ -85,7 +94,15 @@ class VectorConfigReloader:
             "compression": "snappy",
             "tls": {"verify_certificate": True, "verify_hostname": True},
         }
-
+        self.pt_metrics_sink_config = {
+            "type": "prometheus_remote_write",
+            "inputs": ["enrich_pt_metrics"],
+            "endpoint": self.sink_endpoint,
+            "auth": {"strategy": "bearer", "token": "${CRUSOE_MONITORING_TOKEN}"},
+            "healthcheck": {"enabled": False},
+            "compression": "snappy",
+            "tls": {"verify_certificate": True, "verify_hostname": True},
+        }
         LOG.setLevel(reloader_cfg["log_level"])
 
     @staticmethod
@@ -111,11 +128,19 @@ class VectorConfigReloader:
         labels = pod.metadata.labels or {}
         return labels and "app" in labels and labels["app"] == DCGM_EXPORTER_APP_LABEL
 
+    @staticmethod
+    def is_data_api_gateway_pod(pod):
+        labels = pod.metadata.labels or {}
+        return labels and "app.kubernetes.io/name" in labels and labels["app.kubernetes.io/name"] == DATA_API_GATEWAY_APP_LABEL
+
     def handle_sigterm(self, sig, frame):
         self.running = False
 
     def get_dcgm_exporter_scrape_endpoint(self, pod_ip) -> str:
         return f"http://{pod_ip}:{self.dcgm_exporter_port}{self.dcgm_exporter_path}"
+
+    def get_data_api_gateway_scrape_endpoint(self, pod_ip) -> str:
+        return f"http://{pod_ip}:9091/metrics"
 
     def get_custom_metrics_endpoint_cfg(self, pod) -> dict:
         pod_ip = pod.status.pod_ip
@@ -146,6 +171,24 @@ class VectorConfigReloader:
         inputs = set(vector_cfg["transforms"][NODE_METRICS_VECTOR_TRANSFORM_NAME]["inputs"])
         if DCGM_EXPORTER_SOURCE_NAME not in inputs:
             vector_cfg["transforms"][NODE_METRICS_VECTOR_TRANSFORM_NAME]["inputs"].append(DCGM_EXPORTER_SOURCE_NAME)
+
+    def set_data_api_gateway_scrape_config(self, vector_cfg: dict, data_api_gateway_ep: str):
+        if data_api_gateway_ep is None:
+            return
+        sources = vector_cfg.get("sources")
+        transforms = vector_cfg.get("transforms")
+        enrich_pt_metrics = transforms.setdefault("enrich_pt_metrics", DATA_API_GATEWAY_METRICS_VECTOR_TRANSFORM)
+        inputs = set(enrich_pt_metrics.get("inputs", []))
+
+        sources["pt_metrics_scrape"] = {
+            "type": "prometheus_scrape",
+            "endpoints": [data_api_gateway_ep],
+            "scrape_interval_secs": 60,
+            "scrape_timeout_secs": 50
+        }
+        inputs.add("pt_metrics_scrape")
+        enrich_pt_metrics["inputs"] = inputs
+        vector_cfg["sinks"]["cms_gateway_pt_metrics"] = self.pt_metrics_sink_config
 
     def remove_dcgm_exporter_scrape_config(self, vector_cfg: dict):
         vector_cfg.get("sources", {}).pop(DCGM_EXPORTER_SOURCE_NAME, None)
@@ -186,17 +229,21 @@ class VectorConfigReloader:
         base_cfg = YamlUtils.load_yaml_config(VECTOR_BASE_CONFIG_PATH)
 
         dcgm_exporter_ep = None
+        data_api_gateway_ep = None
         custom_metrics_eps = []
         for pod in self.k8s_api_client.list_pod_for_all_namespaces(field_selector=f"spec.nodeName={self.node_name},status.phase=Running").items:
             if VectorConfigReloader.is_custom_metrics_pod(pod):
                 custom_metrics_eps.append(self.get_custom_metrics_endpoint_cfg(pod))
             elif VectorConfigReloader.is_dcgm_exporter_pod(pod):
                 dcgm_exporter_ep = self.get_dcgm_exporter_scrape_endpoint(pod.status.pod_ip)
+            elif VectorConfigReloader.is_data_api_gateway_pod(pod):
+                data_api_gateway_ep = self.get_data_api_gateway_scrape_endpoint(pod.status.pod_ip)
             else:
                 LOG.info(f"Pod {pod.metadata.name} is not a relevant metrics exporter.")
 
         self.set_custom_metrics_scrape_config(base_cfg, custom_metrics_eps)
         self.set_dcgm_exporter_scrape_config(base_cfg, dcgm_exporter_ep)
+        self.set_data_api_gateway_scrape_config(base_cfg, data_api_gateway_ep)
 
         # set endpoint as per env
         base_cfg["sinks"]["cms_gateway_node_metrics"]["endpoint"] = self.sink_endpoint
@@ -220,6 +267,8 @@ class VectorConfigReloader:
                 self.set_custom_metrics_scrape_config(current_vector_cfg, [self.get_custom_metrics_endpoint_cfg(pod)])
             elif VectorConfigReloader.is_dcgm_exporter_pod(pod):
                 self.set_dcgm_exporter_scrape_config(current_vector_cfg, self.get_dcgm_exporter_scrape_endpoint(pod.status.pod_ip))
+            elif VectorConfigReloader.is_data_api_gateway_pod(pod):
+                self.set_data_api_gateway_scrape_config(current_vector_cfg, self.get_data_api_gateway_scrape_endpoint(pod.status.pod_ip))
             else:
                 LOG.info(f"Pod {pod.metadata.name} is not a relevant metrics exporter.")
                 return
