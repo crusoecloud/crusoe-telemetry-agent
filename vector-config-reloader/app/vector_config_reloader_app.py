@@ -187,7 +187,7 @@ class VectorConfigReloader:
             "scrape_timeout_secs": 50
         }
         inputs.add("pt_metrics_scrape")
-        enrich_pt_metrics["inputs"] = inputs
+        enrich_pt_metrics["inputs"] = list(inputs)
         vector_cfg["sinks"]["cms_gateway_pt_metrics"] = self.pt_metrics_sink_config
 
     def remove_dcgm_exporter_scrape_config(self, vector_cfg: dict):
