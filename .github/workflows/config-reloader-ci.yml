@@ -60,9 +60,9 @@ jobs:
           images: ghcr.io/${{ github.repository }}/vector-config-reloader
           tags: |
             type=ref,event=branch
+            type=ref,event=pr
             type=ref,event=tag
             type=semver,pattern={{version}},prefix=
-            type=sha,format=short,prefix=
           flavor: |
             latest=auto
 
