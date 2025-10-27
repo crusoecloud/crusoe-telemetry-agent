@@ -241,7 +241,7 @@ class VectorConfigReloader:
         signal.signal(signal.SIGINT, self.handle_sigterm)
         signal.signal(signal.SIGTERM, self.handle_sigterm)
 
-        # self.bootstrap_config()
+        self.bootstrap_config()
 
         try:
             stream = self.k8s_event_watcher.stream(
