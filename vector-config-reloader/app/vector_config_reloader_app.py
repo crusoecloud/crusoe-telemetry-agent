@@ -1,4 +1,4 @@
-import os, signal, time, re, logging, queue, threading, sys
+import os, signal, re, logging, sys
 from kubernetes import client, config, watch
 from utils import LiteralStr, YamlUtils
 
@@ -53,7 +53,7 @@ MAX_EVENT_WATCHER_RETRIES = 5
 
 logging.basicConfig(
     level=logging.INFO,  # overridden later by config's log_level
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    format="%(asctime)s %(levelname)s: %(message)s",
     stream=sys.stdout,
 )
 LOG = logging.getLogger(__name__)
@@ -68,7 +68,6 @@ class VectorConfigReloader:
         config.load_incluster_config()
         self.k8s_api_client = client.CoreV1Api()
         self.k8s_event_watcher = watch.Watch()
-        self.event_queue = queue.Queue()
 
         reloader_cfg = YamlUtils.load_yaml_config(RELOADER_CONFIG_PATH)
         self.dcgm_exporter_port = reloader_cfg["dcgm_metrics"]["port"]
@@ -238,50 +237,25 @@ class VectorConfigReloader:
         YamlUtils.save_yaml(VECTOR_CONFIG_PATH, current_vector_cfg)
         LOG.info(f"Vector config reloaded!")
 
-    def start_event_watcher(self):
-        event_watcher_retry_count = 0
-        while self.running and event_watcher_retry_count < MAX_EVENT_WATCHER_RETRIES:
-            try:
-                stream = self.k8s_event_watcher.stream(
-                    self.k8s_api_client.list_pod_for_all_namespaces,
-                    field_selector=f"spec.nodeName={self.node_name}",
-                    timeout_seconds=60,
-                )
-                for event in stream:
-                    self.event_queue.put(event)
-                event_watcher_retry_count = 0
-            except Exception as e:
-                event_watcher_retry_count += 1
-                LOG.error(f"k8s event watcher error: {e}, retrying {event_watcher_retry_count}...")
-
-    def run_reloader(self):
-        while self.running:
-            while not self.event_queue.empty():
-                event = self.event_queue.get()
-                self.handle_pod_event(event)
-            time.sleep(60)
-
     def execute(self):
         signal.signal(signal.SIGINT, self.handle_sigterm)
         signal.signal(signal.SIGTERM, self.handle_sigterm)
 
         self.bootstrap_config()
 
-        event_watcher_thread = threading.Thread(target=self.start_event_watcher)
-        reloader_thread = threading.Thread(target=self.run_reloader)
-
-        LOG.info("Starting event watcher thread...")
-        event_watcher_thread.start()
-
-        time.sleep(5)
-
-        LOG.info("Running config reloader thread...")
-        reloader_thread.start()
-
-        event_watcher_thread.join()
-        LOG.info("Event watcher thread completed.")
-        reloader_thread.join()
-        LOG.info("Config reloader thread completed.")
+        try:
+            stream = self.k8s_event_watcher.stream(
+                self.k8s_api_client.list_pod_for_all_namespaces,
+                field_selector=f"spec.nodeName={self.node_name}",
+                _request_timeout=0
+            )
+            for event in stream:
+                self.handle_pod_event(event)
+                if not self.running:
+                    self.k8s_event_watcher.stop()
+                    break
+        except client.ApiException as e:
+            LOG.error(f"k8s event watcher error: {e}")
 
         LOG.info("Exiting config reloader.")
 
