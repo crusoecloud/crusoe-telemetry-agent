@@ -2,7 +2,7 @@ apiVersion: v2
 name: crusoe-telemetry-agent
 description: Helm chart to deploy Crusoe telemetry agent and monitoring token job
 type: application
-version: 0.2.4
+version: 0.2.5
 dependencies:
   - name: vector
     version: "0.45.0"
