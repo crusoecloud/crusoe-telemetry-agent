@@ -2,7 +2,7 @@ name: HELM Package CI
 on:
   push:
     branches:
-      - fix-helm-ci
+      - main
     paths:
       - 'helm-charts/**'
 
