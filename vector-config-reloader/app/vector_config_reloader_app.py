@@ -47,12 +47,24 @@ nodepool_id_parts, _ = slice(prefix_parts, 0, length(prefix_parts) - 1)
 .tags.crusoe_resource = "custom_metrics"
 """)
 }
+DATA_API_GATEWAY_METRICS_FILTER_TRANSFORM = {
+    "type": "filter",
+    "inputs": ["pt_metrics_scrape"],
+    "condition": {
+        "type": "vrl",
+        "source": LiteralStr("""
+metrics_allowlist = ["inference_counter_chat_request", "inference_counter_output_token", "inference_counter_prompt_token", "inference_histogram_first_token_latency_bucket", "inference_histogram_output_token_latency_bucket"];
+includes(metrics_allowlist, .name)
+""")
+    }
+}
+
 DATA_API_GATEWAY_METRICS_VECTOR_TRANSFORM = {
     "type": "remap",
-    "inputs": [],
+    "inputs": ["filter_pt_metrics"],
     "source": LiteralStr("""
 .tags.vm_id = "${VM_ID}"
-.tags.crusoe_resource = "pt_metrics"
+.tags.crusoe_resource = "k8s::inference::provisioned_throughput"
 """)
 }
 
@@ -177,8 +189,8 @@ class VectorConfigReloader:
             return
         sources = vector_cfg.get("sources")
         transforms = vector_cfg.get("transforms")
-        enrich_pt_metrics = transforms.setdefault("enrich_pt_metrics", DATA_API_GATEWAY_METRICS_VECTOR_TRANSFORM)
-        inputs = set(enrich_pt_metrics.get("inputs", []))
+        transforms.setdefault("filter_pt_metrics", DATA_API_GATEWAY_METRICS_FILTER_TRANSFORM)
+        transforms.setdefault("enrich_pt_metrics", DATA_API_GATEWAY_METRICS_VECTOR_TRANSFORM)
 
         sources["pt_metrics_scrape"] = {
             "type": "prometheus_scrape",
@@ -186,9 +198,16 @@ class VectorConfigReloader:
             "scrape_interval_secs": 60,
             "scrape_timeout_secs": 50
         }
-        inputs.add("pt_metrics_scrape")
-        enrich_pt_metrics["inputs"] = list(inputs)
+
         vector_cfg["sinks"]["cms_gateway_pt_metrics"] = self.pt_metrics_sink_config
+        vector_cfg["sinks"]["console_sink"] = {
+            "type": "console",
+            "inputs": ["enrich_pt_metrics"],
+            "encoding": {
+                "codec": "text"
+            }
+        }
+
 
     def remove_dcgm_exporter_scrape_config(self, vector_cfg: dict):
         vector_cfg.get("sources", {}).pop(DCGM_EXPORTER_SOURCE_NAME, None)
@@ -237,6 +256,7 @@ class VectorConfigReloader:
             elif VectorConfigReloader.is_dcgm_exporter_pod(pod):
                 dcgm_exporter_ep = self.get_dcgm_exporter_scrape_endpoint(pod.status.pod_ip)
             elif VectorConfigReloader.is_data_api_gateway_pod(pod):
+                LOG.info(f"Found DAG Pod {pod.metadata.name} is a relevant metrics exporter.")
                 data_api_gateway_ep = self.get_data_api_gateway_scrape_endpoint(pod.status.pod_ip)
             else:
                 LOG.info(f"Pod {pod.metadata.name} is not a relevant metrics exporter.")
@@ -268,6 +288,7 @@ class VectorConfigReloader:
             elif VectorConfigReloader.is_dcgm_exporter_pod(pod):
                 self.set_dcgm_exporter_scrape_config(current_vector_cfg, self.get_dcgm_exporter_scrape_endpoint(pod.status.pod_ip))
             elif VectorConfigReloader.is_data_api_gateway_pod(pod):
+                LOG.info(f"Found DAG Pod {pod.metadata.name} is a relevant metrics exporter.")
                 self.set_data_api_gateway_scrape_config(current_vector_cfg, self.get_data_api_gateway_scrape_endpoint(pod.status.pod_ip))
             else:
                 LOG.info(f"Pod {pod.metadata.name} is not a relevant metrics exporter.")
