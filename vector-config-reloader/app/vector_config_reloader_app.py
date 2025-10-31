@@ -64,7 +64,8 @@ DATA_API_GATEWAY_METRICS_VECTOR_TRANSFORM = {
     "inputs": ["filter_pt_metrics"],
     "source": LiteralStr("""
 .tags.vm_id = "${VM_ID}"
-.tags.crusoe_resource = "k8s::inference::provisioned_throughput"
+.tags.pt_project_id = "${CRUSOE_PROJECT_ID}"
+.tags.crusoe_resource = "cri:inference:provisioned_throughput"
 """)
 }
 
@@ -199,14 +200,14 @@ class VectorConfigReloader:
         }
 
         vector_cfg["sinks"]["cms_gateway_pt_metrics"] = self.pt_metrics_sink_config
-        vector_cfg["sinks"]["console_sink"] = {
-            "type": "console",
-            "inputs": ["enrich_pt_metrics"],
-            "encoding": {
-                "codec": "text"
-            }
-        }
-
+        # uncomment to debug pt metrics
+        # vector_cfg["sinks"]["console_sink"] = {
+        #     "type": "console",
+        #     "inputs": ["enrich_pt_metrics"],
+        #     "encoding": {
+        #         "codec": "text"
+        #     }
+        # }
 
     def remove_dcgm_exporter_scrape_config(self, vector_cfg: dict):
         vector_cfg.get("sources", {}).pop(DCGM_EXPORTER_SOURCE_NAME, None)
