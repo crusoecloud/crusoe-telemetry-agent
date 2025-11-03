@@ -65,6 +65,7 @@ DATA_API_GATEWAY_METRICS_VECTOR_TRANSFORM = {
     "source": LiteralStr("""
 .tags.vm_id = "${VM_ID}"
 .tags.pt_project_id = "${CRUSOE_PROJECT_ID}"
+.tags.project_id = "${CRUSOE_PROJECT_ID}"
 .tags.crusoe_resource = "cri:inference:provisioned_throughput"
 """)
 }
