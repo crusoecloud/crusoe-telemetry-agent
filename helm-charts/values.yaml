@@ -206,6 +206,10 @@ vector:
         secretKeyRef:
           name: crusoe-monitoring-token
           key: CRUSOE_MONITORING_TOKEN
+    - name: CHART_VERSION
+      value: "{{ .Chart.Version }}"
+    - name: CHART_NAME
+      value: "{{ .Chart.Name }}"
 
   # envFrom -- Define environment variables from Secrets or ConfigMaps.
   envFrom:
@@ -356,6 +360,12 @@ vector:
             includes:
               - "ens*"
         scrape_interval_secs: 60
+      internal_metrics:
+        type: internal_metrics
+        scrape_interval_secs: 60
+        tags:
+          chart_version: "${CHART_VERSION}"
+          chart_name: "${CHART_NAME}"
     transforms:
       enrich_node_metrics:
         type: remap
@@ -374,11 +384,25 @@ vector:
           .tags.cluster_id = "${CRUSOE_CLUSTER_ID}"
           .tags.vm_id = "${VM_ID}"
           .tags.crusoe_resource = "vm"
+      version_info_metric:
+        type: remap
+        inputs:
+          - internal_metrics
+        source: |
+          # Create a version info gauge metric
+          .name = "crusoe_agent_version_info"
+          .kind = "absolute"
+          .gauge.value = 1.0
+          .tags.chart_version = "${CHART_VERSION}"
+          .tags.chart_name = "${CHART_NAME}"
+          .tags.cluster_id = "${CRUSOE_CLUSTER_ID}"
+          .tags.vm_id = "${VM_ID}"
     sinks:
       cms_gateway_node_metrics:
         type: prometheus_remote_write
         inputs:
           - enrich_node_metrics
+          - version_info_metric
         endpoint: "https://cms-monitoring.crusoecloud.com/ingest"
         auth:
           strategy: bearer
