@@ -14,6 +14,12 @@ sources:
               - "ens*"
         scrape_interval_secs: 60
 
+    internal_metrics:
+      type: internal_metrics
+      scrape_interval_secs: 60
+      tags:
+        agent_version: "${AGENT_VERSION}"
+
 transforms:
     add_update_labels:
         type: remap
@@ -23,12 +29,25 @@ transforms:
             del(.tags.Hostname)
             .tags.vm_id = "${VM_ID}"
             .tags.crusoe_resource = "vm"
+    version_info_metric:
+      type: remap
+      inputs:
+        - internal_metrics
+      source: |
+        # Create a version info gauge metric
+        .name = "crusoe_agent_version_info"
+        .kind = "absolute"
+        .gauge.value = 1.0
+        .tags.agent_version = "${AGENT_VERSION}"
+        .tags.vm_id = "${VM_ID}"
+        .tags.crusoe_resource = "vm"
 
 sinks:
     cms_gateway:
         type: prometheus_remote_write
         inputs:
             - add_update_labels
+            - version_info_metric
         endpoint: "https://cms-monitoring.crusoecloud.com/ingest"
         auth:
             strategy: bearer

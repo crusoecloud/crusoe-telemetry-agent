@@ -4,6 +4,9 @@
 UBUNTU_OS_VERSION=$(lsb_release -r -s)
 CRUSOE_VM_ID=$(dmidecode -s system-uuid)
 
+# Agent version - update this when releasing new versions
+AGENT_VERSION="1.0.0"
+
 # GitHub branch (optional override via CLI, defaults to main)
 GITHUB_BRANCH="main"
 
@@ -247,11 +250,12 @@ if [[ -z "$CRUSOE_AUTH_TOKEN" ]]; then
   fi
 fi
 
-status "Creating .env file with CRUSOE_AUTH_TOKEN and VM_ID."
+status "Creating .env file with CRUSOE_AUTH_TOKEN, VM_ID, and AGENT_VERSION."
 cat <<EOF > "$ENV_FILE"
 CRUSOE_AUTH_TOKEN='${CRUSOE_AUTH_TOKEN}'
 VM_ID='${CRUSOE_VM_ID}'
 DCGM_EXPORTER_PORT='${DCGM_EXPORTER_SERVICE_PORT}'
+AGENT_VERSION='${AGENT_VERSION}'
 EOF
 echo ".env file created at $ENV_FILE"
 
