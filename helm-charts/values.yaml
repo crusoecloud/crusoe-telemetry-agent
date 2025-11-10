@@ -1,4 +1,4 @@
-namespace: crusoe-system
+namespace: data-api-gateway
 environment: prod
 endpoints:
   prod: "https://cms-monitoring.crusoecloud.com/ingest"
@@ -144,7 +144,7 @@ vector:
 
   rbac:
     # rbac.create -- If true, create and use RBAC resources. Only valid for the "Agent" role.
-    create: true
+    create: false
 
   psp:
     # psp.create -- If true, create a [PodSecurityPolicy](https://kubernetes.io/docs/concepts/security/pod-security-policy/)
@@ -473,6 +473,10 @@ vector:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
       volumeMounts:
         - name: vector-config
           mountPath: /etc/vector
