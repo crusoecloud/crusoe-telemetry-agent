@@ -86,6 +86,9 @@ class VectorConfigReloader:
         self.node_name = os.environ.get("NODE_NAME")
         if not self.node_name:
             raise RuntimeError("NODE_NAME not set")
+        
+        self.namespace = os.environ.get("POD_NAMESPACE", "default")
+        LOG.info(f"Watching pods in namespace: {self.namespace}")
 
         self.namespace = os.environ.get("POD_NAMESPACE", "default")
         LOG.info(f"Watching pods in namespace: {self.namespace}")
