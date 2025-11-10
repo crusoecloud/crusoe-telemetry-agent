@@ -87,6 +87,9 @@ class VectorConfigReloader:
         if not self.node_name:
             raise RuntimeError("NODE_NAME not set")
 
+        self.namespace = os.environ.get("POD_NAMESPACE", "default")
+        LOG.info(f"Watching pods in namespace: {self.namespace}")
+
         self.running = True
         config.load_incluster_config()
         self.k8s_api_client = client.CoreV1Api()
@@ -257,7 +260,7 @@ class VectorConfigReloader:
         dcgm_exporter_ep = None
         data_api_gateway_ep = None
         custom_metrics_eps = []
-        for pod in self.k8s_api_client.list_pod_for_all_namespaces(field_selector=f"spec.nodeName={self.node_name},status.phase=Running").items:
+        for pod in self.k8s_api_client.list_namespaced_pod(namespace=self.namespace, field_selector=f"spec.nodeName={self.node_name},status.phase=Running").items:
             if VectorConfigReloader.is_custom_metrics_pod(pod):
                 custom_metrics_eps.append(self.get_custom_metrics_endpoint_cfg(pod))
             elif VectorConfigReloader.is_dcgm_exporter_pod(pod):
@@ -326,7 +329,8 @@ class VectorConfigReloader:
 
         try:
             stream = self.k8s_event_watcher.stream(
-                self.k8s_api_client.list_pod_for_all_namespaces,
+                self.k8s_api_client.list_namespaced_pod,
+                namespace=self.namespace,
                 field_selector=f"spec.nodeName={self.node_name}",
                 _request_timeout=0
             )
