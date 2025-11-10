@@ -366,6 +366,9 @@ vector:
         tags:
           chart_version: "${CHART_VERSION}"
           chart_name: "${CHART_NAME}"
+          cluster_id: "${CRUSOE_CLUSTER_ID}"
+          vm_id: "${VM_ID}"
+          crusoe_resource: "vm"
     transforms:
       enrich_node_metrics:
         type: remap
@@ -384,25 +387,12 @@ vector:
           .tags.cluster_id = "${CRUSOE_CLUSTER_ID}"
           .tags.vm_id = "${VM_ID}"
           .tags.crusoe_resource = "vm"
-      version_info_metric:
-        type: remap
-        inputs:
-          - internal_metrics
-        source: |
-          # Create a version info gauge metric
-          .name = "crusoe_agent_version_info"
-          .kind = "absolute"
-          .gauge.value = 1.0
-          .tags.chart_version = "${CHART_VERSION}"
-          .tags.chart_name = "${CHART_NAME}"
-          .tags.cluster_id = "${CRUSOE_CLUSTER_ID}"
-          .tags.vm_id = "${VM_ID}"
     sinks:
       cms_gateway_node_metrics:
         type: prometheus_remote_write
         inputs:
           - enrich_node_metrics
-          - version_info_metric
+          - internal_metrics
         endpoint: "https://cms-monitoring.crusoecloud.com/ingest"
         auth:
           strategy: bearer

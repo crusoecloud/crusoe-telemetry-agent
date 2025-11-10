@@ -5,7 +5,7 @@ UBUNTU_OS_VERSION=$(lsb_release -r -s)
 CRUSOE_VM_ID=$(dmidecode -s system-uuid)
 
 # Agent version - update this when releasing new versions
-AGENT_VERSION="1.0.0"
+AGENT_VERSION="0.2.5"
 
 # GitHub branch (optional override via CLI, defaults to main)
 GITHUB_BRANCH="main"
