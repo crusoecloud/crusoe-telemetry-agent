@@ -53,7 +53,7 @@ DATA_API_GATEWAY_METRICS_FILTER_TRANSFORM = {
     "condition": {
         "type": "vrl",
         "source": LiteralStr("""
-metrics_allowlist = ["inference_counter_chat_request", "inference_counter_output_token", "inference_counter_prompt_token", "inference_histogram_first_token_latency_bucket", "inference_histogram_output_token_latency_bucket"]
+metrics_allowlist = ["inference_counter_chat_request", "inference_counter_output_token", "inference_counter_prompt_token", "inference_histogram_first_token_latency_bucket", "inference_histogram_output_token_latency_bucket", "inference_histogram_output_token_throughput_bucket"]
 includes(metrics_allowlist, .name)
 """)
     }
