@@ -467,7 +467,7 @@ vector:
   # This also supports template content, which will eventually be converted to yaml.
   extraContainers:
     - name: vector-config-reloader
-      image: ghcr.io/crusoecloud/crusoe-telemetry-agent/vector-config-reloader:4bf6b62
+      image: ghcr.io/crusoecloud/crusoe-telemetry-agent/vector-config-reloader:31d28f2
       env:
         - name: NODE_NAME
           valueFrom:
@@ -587,7 +587,7 @@ vector:
     honorTimestamps: true
 
   # Log level for Vector.
-  logLevel: "info"
+  logLevel: "debug"
 
   # Optional built-in HAProxy load balancer.
   haproxy:
