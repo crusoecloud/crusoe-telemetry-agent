@@ -211,6 +211,11 @@ vector:
         secretKeyRef:
           name: crusoe-secrets
           key: CRUSOE_CLUSTER_ID
+    - name: CRUSOE_PROJECT_ID
+      valueFrom:
+        secretKeyRef:
+          name: crusoe-secrets
+          key: CRUSOE_PROJECT_ID
 
   # envFrom -- Define environment variables from Secrets or ConfigMaps.
   envFrom:
