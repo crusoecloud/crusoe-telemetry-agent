@@ -316,8 +316,6 @@ class VectorConfigReloader:
                 return
 
         LOG.debug(f"Writing vector config: {str(current_vector_cfg)}")
-        # always update the node metrics transform source to handle LiteralStr issue
-        current_vector_cfg["transforms"][NODE_METRICS_VECTOR_TRANSFORM_NAME]["source"] = NODE_METRICS_VECTOR_TRANSFORM_SOURCE
         YamlUtils.save_yaml(VECTOR_CONFIG_PATH, current_vector_cfg)
         LOG.info(f"Vector config reloaded!")
 
