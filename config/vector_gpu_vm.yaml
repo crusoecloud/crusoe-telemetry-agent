@@ -21,6 +21,10 @@ sources:
         scrape_interval_secs: 60
         scrape_timeout_secs: 50
 
+    internal_metrics:
+      type: internal_metrics
+      scrape_interval_secs: 60
+
 transforms:
     add_update_labels:
         type: remap
@@ -31,13 +35,23 @@ transforms:
             del(.tags.Hostname)
             .tags.vm_id = "${VM_ID}"
             .tags.crusoe_resource = "vm"
-            .tags.agent_version = "${AGENT_VERSION}"
+
+    add_internal_labels:
+        type: remap
+        inputs:
+          - internal_metrics
+        source: |
+          del(.tags.Hostname)
+          .tags.vm_id = "${VM_ID}"
+          .tags.crusoe_resource = "vm"
+          .tags.agent_version = "${AGENT_VERSION}"
 
 sinks:
     cms_gateway:
         type: prometheus_remote_write
         inputs:
             - add_update_labels
+            - add_internal_labels
         endpoint: "https://cms-monitoring.crusoecloud.com/ingest"
         auth:
             strategy: bearer
