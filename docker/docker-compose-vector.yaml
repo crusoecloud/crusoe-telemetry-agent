@@ -1,6 +1,6 @@
 services:
   crusoe-vector:
-    image: ghcr.io/crusoecloud/vector:0.46.1-debian
+    image: timberio/vector:0.46.1-debian
     container_name: crusoe-vector
     hostname: crusoe-vector
     volumes:
