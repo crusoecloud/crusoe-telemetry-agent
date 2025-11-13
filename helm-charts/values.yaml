@@ -349,60 +349,12 @@ vector:
   # customConfig -- Override Vector's default configs, if used **all** options need to be specified. This section supports
   # using helm templates to populate dynamic values. See Vector's [configuration documentation](https://vector.dev/docs/reference/configuration/)
   # for all options.
+  # Base config is empty - vector-config-reloader will populate sources/transforms/sinks dynamically
   customConfig:
     data_dir: /vector-data-dir
-    sources:
-      host_metrics:
-        type: host_metrics
-        collectors:
-          - cpu
-          - disk
-          - memory
-          - network
-        network:
-          devices:
-            excludes:
-              - "lo*"
-            includes:
-              - "ens*"
-        scrape_interval_secs: 60
-    transforms:
-      enrich_node_metrics:
-        type: remap
-        inputs:
-          - host_metrics
-        source: |
-          if exists(.tags.Hostname) {
-            parts, _ = split(.tags.Hostname, ".")
-            host_prefix = get(parts, [0]) ?? ""
-
-            prefix_parts, _ = split(host_prefix, "-")
-            nodepool_id_parts, _ = slice(prefix_parts, 0, length(prefix_parts) - 1)
-
-            .tags.nodepool, _ = join(nodepool_id_parts, "-")
-          }
-          .tags.cluster_id = "${CRUSOE_CLUSTER_ID}"
-          .tags.vm_id = "${VM_ID}"
-          .tags.crusoe_resource = "vm"
-    sinks:
-      cms_gateway_node_metrics:
-        type: prometheus_remote_write
-        inputs:
-          - enrich_node_metrics
-        endpoint: "https://cms-monitoring.crusoecloud.com/ingest"
-        auth:
-          strategy: bearer
-          token: "${CRUSOE_MONITORING_TOKEN}"
-        healthcheck:
-          enabled: false
-        request:
-          concurrency: none
-          rate_limit_duration_secs: 60
-          rate_limit_num: 2
-        compression: snappy
-        tls:
-          verify_certificate: true
-          verify_hostname: true
+    sources: {}
+    transforms: {}
+    sinks: {}
   # defaultVolumes -- Default volumes that are mounted into pods. In most cases, these should not be changed.
   # Use `extraVolumes`/`extraVolumeMounts` for additional custom volumes.
   # @default -- See `values.yaml`
@@ -477,7 +429,7 @@ vector:
   # This also supports template content, which will eventually be converted to yaml.
   extraContainers:
     - name: vector-config-reloader
-      image: ghcr.io/crusoecloud/crusoe-telemetry-agent/vector-config-reloader:2b2c5ff
+      image: ghcr.io/crusoecloud/crusoe-telemetry-agent/vector-config-reloader:c50e7f2
       env:
         - name: NODE_NAME
           valueFrom:
