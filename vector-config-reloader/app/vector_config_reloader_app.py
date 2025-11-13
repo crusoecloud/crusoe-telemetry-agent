@@ -193,8 +193,10 @@ class VectorConfigReloader:
     def set_data_api_gateway_scrape_config(self, vector_cfg: dict, data_api_gateway_ep: str):
         if data_api_gateway_ep is None:
             return
-        sources = vector_cfg.get("sources")
-        transforms = vector_cfg.get("transforms")
+        sources = vector_cfg.setdefault("sources", {})
+        transforms = vector_cfg.setdefault("transforms", {})
+        sinks = vector_cfg.setdefault("sinks", {})
+        
         transforms.setdefault("filter_pt_metrics", DATA_API_GATEWAY_METRICS_FILTER_TRANSFORM)
         transforms.setdefault("enrich_pt_metrics", DATA_API_GATEWAY_METRICS_VECTOR_TRANSFORM)
 
@@ -205,7 +207,7 @@ class VectorConfigReloader:
             "scrape_timeout_secs": 50
         }
 
-        vector_cfg["sinks"]["cms_gateway_pt_metrics"] = self.pt_metrics_sink_config
+        sinks["cms_gateway_pt_metrics"] = self.pt_metrics_sink_config
         # uncomment to debug pt metrics
         # vector_cfg["sinks"]["console_sink"] = {
         #     "type": "console",
