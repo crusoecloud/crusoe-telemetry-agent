@@ -55,7 +55,7 @@ DATA_API_GATEWAY_METRICS_FILTER_TRANSFORM = {
         "source": LiteralStr("""
 metrics_allowlist = ["inference_counter_chat_request", "inference_counter_output_token", "inference_counter_prompt_token"]
 # Allow metrics in allowlist OR all inference_histogram_ series
-includes(metrics_allowlist, .name) or .name.starts_with("inference_histogram_")
+includes(metrics_allowlist, .name) || starts_with!(.name, "inference_histogram_")
 """)
     }
 }
