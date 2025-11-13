@@ -349,12 +349,18 @@ vector:
   # customConfig -- Override Vector's default configs, if used **all** options need to be specified. This section supports
   # using helm templates to populate dynamic values. See Vector's [configuration documentation](https://vector.dev/docs/reference/configuration/)
   # for all options.
-  # Base config is empty - vector-config-reloader will populate sources/transforms/sinks dynamically
+  # Base config has minimal dummy source/sink - vector-config-reloader will populate real sources/transforms/sinks dynamically
   customConfig:
     data_dir: /vector-data-dir
-    sources: {}
-    transforms: {}
-    sinks: {}
+    sources:
+      dummy_internal_metrics:
+        type: internal_metrics
+    sinks:
+      dummy_blackhole:
+        type: blackhole
+        inputs:
+          - dummy_internal_metrics
+        print_interval_secs: 3600
   # defaultVolumes -- Default volumes that are mounted into pods. In most cases, these should not be changed.
   # Use `extraVolumes`/`extraVolumeMounts` for additional custom volumes.
   # @default -- See `values.yaml`
