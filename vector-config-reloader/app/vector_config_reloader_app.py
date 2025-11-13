@@ -63,7 +63,6 @@ DATA_API_GATEWAY_METRICS_VECTOR_TRANSFORM = {
     "type": "remap",
     "inputs": ["filter_pt_metrics"],
     "source": LiteralStr("""
-.tags.vm_id = "${VM_ID}"
 .tags.pt_project_id = "${CRUSOE_PROJECT_ID}"
 .tags.project_id = "${CRUSOE_PROJECT_ID}"
 .tags.crusoe_resource = "cri:inference:provisioned_throughput"
@@ -278,12 +277,21 @@ class VectorConfigReloader:
         self.set_dcgm_exporter_scrape_config(base_cfg, dcgm_exporter_ep)
         self.set_data_api_gateway_scrape_config(base_cfg, data_api_gateway_ep)
 
+        # Only remove infra metrics if we have PT metrics to replace them
+        # otherwise vector will complain "No sources defined in the config" or "No sinks defined in the config"
+        if data_api_gateway_ep:
+            # remove infra metrics, just let PT through
+            base_cfg.get("sources", {}).pop("host_metrics", None)
+            base_cfg.get("transforms", {}).pop("enrich_node_metrics", None)
+            base_cfg.get("sinks", {}).pop("cms_gateway_node_metrics", None)
+    
         # set endpoint as per env
         base_cfg["sinks"]["cms_gateway_node_metrics"]["endpoint"] = self.sink_endpoint
-
-        LOG.debug(f"Writing vector config {str(base_cfg)}")
         # always update the node metrics transform source to handle LiteralStr issue
         base_cfg["transforms"][NODE_METRICS_VECTOR_TRANSFORM_NAME]["source"] = NODE_METRICS_VECTOR_TRANSFORM_SOURCE
+
+        LOG.debug(f"Writing vector config {str(base_cfg)}")
+
         YamlUtils.save_yaml(VECTOR_CONFIG_PATH, base_cfg)
         LOG.info(f"Vector config bootstrapped!")
 
