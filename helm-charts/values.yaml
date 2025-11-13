@@ -207,9 +207,15 @@ vector:
           name: crusoe-monitoring-token
           key: CRUSOE_MONITORING_TOKEN
     - name: CHART_VERSION
-      value: "{{ .Chart.Version }}"
+      valueFrom:
+        configMapKeyRef:
+          name: crusoe-telemetry-agent-metadata
+          key: chart-version
     - name: CHART_NAME
-      value: "{{ .Chart.Name }}"
+      valueFrom:
+        configMapKeyRef:
+          name: crusoe-telemetry-agent-metadata
+          key: chart-name
 
   # envFrom -- Define environment variables from Secrets or ConfigMaps.
   envFrom:
@@ -363,12 +369,7 @@ vector:
       internal_metrics:
         type: internal_metrics
         scrape_interval_secs: 60
-        tags:
-          chart_version: "${CHART_VERSION}"
-          chart_name: "${CHART_NAME}"
-          cluster_id: "${CRUSOE_CLUSTER_ID}"
-          vm_id: "${VM_ID}"
-          crusoe_resource: "vm"
+
     transforms:
       enrich_node_metrics:
         type: remap
@@ -387,12 +388,31 @@ vector:
           .tags.cluster_id = "${CRUSOE_CLUSTER_ID}"
           .tags.vm_id = "${VM_ID}"
           .tags.crusoe_resource = "vm"
+
+      add_internal_labels:
+        type: remap
+        inputs:
+            - internal_metrics
+        source: |
+            del(.tags.Hostname)
+            .tags.vm_id = "${VM_ID}"
+            .tags.crusoe_resource = "vm"
+            .tags.chart_name = "${CHART_NAME}"
+            .tags.chart_version = "${CHART_VERSION}"
+
     sinks:
+      console:
+        type: console
+        inputs:
+          - enrich_node_metrics
+          - add_internal_labels
+        encoding:
+          codec: json
       cms_gateway_node_metrics:
         type: prometheus_remote_write
         inputs:
           - enrich_node_metrics
-          - internal_metrics
+          - add_internal_labels
         endpoint: "https://cms-monitoring.crusoecloud.com/ingest"
         auth:
           strategy: bearer
