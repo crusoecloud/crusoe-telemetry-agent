@@ -53,9 +53,16 @@ DATA_API_GATEWAY_METRICS_FILTER_TRANSFORM = {
     "condition": {
         "type": "vrl",
         "source": LiteralStr("""
-metrics_allowlist = ["inference_counter_chat_request", "inference_counter_output_token", "inference_counter_prompt_token"]
-# Allow metrics in allowlist OR all inference_histogram_ series
-includes(metrics_allowlist, .name) || starts_with!(.name, "inference_histogram_")
+metrics_allowlist = [
+          "inference_counter_chat_request",
+          "inference_counter_output_token",
+          "inference_counter_prompt_token",
+          # Histogram base names (no _bucket/_sum/_count)
+          "inference_histogram_first_token_latency",
+          "inference_histogram_output_token_latency",
+          "inference_histogram_output_token_throughput",
+        ]
+        includes(metrics_allowlist, .name)
 """)
     }
 }
@@ -65,7 +72,6 @@ DATA_API_GATEWAY_METRICS_VECTOR_TRANSFORM = {
     "inputs": ["filter_pt_metrics"],
     "source": LiteralStr("""
 .tags.pt_project_id = "${CRUSOE_PROJECT_ID}"
-.tags.project_id = "${CRUSOE_PROJECT_ID}"
 .tags.crusoe_resource = "cri:inference:provisioned_throughput"
 """)
 }
