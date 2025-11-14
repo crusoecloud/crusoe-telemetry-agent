@@ -127,6 +127,7 @@ class VectorConfigReloader:
             "healthcheck": {"enabled": False},
             "compression": "snappy",
             "tls": {"verify_certificate": True, "verify_hostname": True},
+            "batch": {"max_bytes": 1048576},
         }
         LOG.setLevel(reloader_cfg["log_level"])
 
