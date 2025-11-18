@@ -395,19 +395,13 @@ vector:
             - internal_metrics
         source: |
             del(.tags.Hostname)
+            .tags.cluster_id = "${CRUSOE_CLUSTER_ID}"
             .tags.vm_id = "${VM_ID}"
             .tags.crusoe_resource = "vm"
             .tags.chart_name = "${CHART_NAME}"
             .tags.chart_version = "${CHART_VERSION}"
 
     sinks:
-      console:
-        type: console
-        inputs:
-          - enrich_node_metrics
-          - add_internal_labels
-        encoding:
-          codec: json
       cms_gateway_node_metrics:
         type: prometheus_remote_write
         inputs:
