@@ -98,8 +98,8 @@ check_root() {
   fi
 }
 
-check_os_support() {
-  if [[ $UBUNTU_OS_VERSION != "22.04" ]]; then
+ check_os_support() {
+  if [[ $UBUNTU_OS_VERSION != "22.04" && $UBUNTU_OS_VERSION != "24.04" ]]; then
     error_exit "Ubuntu version $UBUNTU_OS_VERSION is not supported."
   fi
 }
