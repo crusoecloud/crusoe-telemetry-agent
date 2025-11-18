@@ -71,6 +71,14 @@ DATA_API_GATEWAY_METRICS_VECTOR_TRANSFORM = {
     "type": "remap",
     "inputs": ["filter_pt_metrics"],
     "source": LiteralStr("""
+del(.tags.backend_name)
+del(.tags.error_code)
+del(.tags.gateway_name)
+del(.tags.is_shadow)
+del(.tags.is_streaming)
+del(.tags.method)
+del(.tags.provider)
+del(.tags.worker_id)
 .tags.pt_project_id = "${CRUSOE_PROJECT_ID}"
 .tags.crusoe_resource = "cri:inference:provisioned_throughput"
 """)
