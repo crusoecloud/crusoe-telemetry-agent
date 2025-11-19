@@ -8,6 +8,7 @@ RELOADER_CONFIG_PATH = "/etc/reloader/config.yaml"
 
 DCGM_EXPORTER_SOURCE_NAME = "dcgm_exporter_scrape"
 DCGM_EXPORTER_APP_LABEL = "nvidia-dcgm-exporter"
+DATA_API_GATEWAY_APP_LABEL = "data-api-gateway"
 NODE_METRICS_VECTOR_TRANSFORM_NAME = "enrich_node_metrics"
 NODE_METRICS_VECTOR_TRANSFORM_SOURCE = LiteralStr("""
 if exists(.tags.Hostname) {
@@ -46,6 +47,42 @@ nodepool_id_parts, _ = slice(prefix_parts, 0, length(prefix_parts) - 1)
 .tags.crusoe_resource = "custom_metrics"
 """)
 }
+DATA_API_GATEWAY_METRICS_FILTER_TRANSFORM = {
+    "type": "filter",
+    "inputs": ["pt_metrics_scrape"],
+    "condition": {
+        "type": "vrl",
+        "source": LiteralStr("""
+metrics_allowlist = [
+          "inference_counter_chat_request",
+          "inference_counter_output_token",
+          "inference_counter_prompt_token",
+          # Histogram base names (no _bucket/_sum/_count)
+          "inference_histogram_first_token_latency",
+          "inference_histogram_output_token_latency",
+          "inference_histogram_output_token_throughput",
+        ]
+        includes(metrics_allowlist, .name)
+""")
+    }
+}
+
+DATA_API_GATEWAY_METRICS_VECTOR_TRANSFORM = {
+    "type": "remap",
+    "inputs": ["filter_pt_metrics"],
+    "source": LiteralStr("""
+del(.tags.backend_name)
+del(.tags.error_code)
+del(.tags.gateway_name)
+del(.tags.is_shadow)
+del(.tags.is_streaming)
+del(.tags.method)
+del(.tags.provider)
+del(.tags.worker_id)
+.tags.pt_project_id = "${CRUSOE_PROJECT_ID}"
+.tags.crusoe_resource = "cri:inference:provisioned_throughput"
+""")
+}
 
 SCRAPE_INTERVAL_MIN_THRESHOLD = 5
 SCRAPE_TIMEOUT_PERCENTAGE = 0.7
@@ -63,6 +100,12 @@ class VectorConfigReloader:
         self.node_name = os.environ.get("NODE_NAME")
         if not self.node_name:
             raise RuntimeError("NODE_NAME not set")
+        
+        self.namespace = os.environ.get("POD_NAMESPACE", "default")
+        LOG.info(f"Watching pods in namespace: {self.namespace}")
+
+        self.namespace = os.environ.get("POD_NAMESPACE", "default")
+        LOG.info(f"Watching pods in namespace: {self.namespace}")
 
         self.running = True
         config.load_incluster_config()
@@ -84,7 +127,16 @@ class VectorConfigReloader:
             "compression": "snappy",
             "tls": {"verify_certificate": True, "verify_hostname": True},
         }
-
+        self.pt_metrics_sink_config = {
+            "type": "prometheus_remote_write",
+            "inputs": ["enrich_pt_metrics"],
+            "endpoint": self.sink_endpoint,
+            "auth": {"strategy": "bearer", "token": "${CRUSOE_MONITORING_TOKEN}"},
+            "healthcheck": {"enabled": False},
+            "compression": "snappy",
+            "tls": {"verify_certificate": True, "verify_hostname": True},
+            "batch": {"max_bytes": 50000},
+        }
         LOG.setLevel(reloader_cfg["log_level"])
 
     @staticmethod
@@ -110,11 +162,19 @@ class VectorConfigReloader:
         labels = pod.metadata.labels or {}
         return labels and "app" in labels and labels["app"] == DCGM_EXPORTER_APP_LABEL
 
+    @staticmethod
+    def is_data_api_gateway_pod(pod):
+        labels = pod.metadata.labels or {}
+        return labels and "app.kubernetes.io/name" in labels and labels["app.kubernetes.io/name"] == DATA_API_GATEWAY_APP_LABEL
+
     def handle_sigterm(self, sig, frame):
         self.running = False
 
     def get_dcgm_exporter_scrape_endpoint(self, pod_ip) -> str:
         return f"http://{pod_ip}:{self.dcgm_exporter_port}{self.dcgm_exporter_path}"
+
+    def get_data_api_gateway_scrape_endpoint(self, pod_ip) -> str:
+        return f"http://{pod_ip}:9091/metrics"
 
     def get_custom_metrics_endpoint_cfg(self, pod) -> dict:
         pod_ip = pod.status.pod_ip
@@ -146,11 +206,44 @@ class VectorConfigReloader:
         if DCGM_EXPORTER_SOURCE_NAME not in inputs:
             vector_cfg["transforms"][NODE_METRICS_VECTOR_TRANSFORM_NAME]["inputs"].append(DCGM_EXPORTER_SOURCE_NAME)
 
+    def set_data_api_gateway_scrape_config(self, vector_cfg: dict, data_api_gateway_ep: str):
+        if data_api_gateway_ep is None:
+            return
+        sources = vector_cfg.setdefault("sources", {})
+        transforms = vector_cfg.setdefault("transforms", {})
+        sinks = vector_cfg.setdefault("sinks", {})
+        
+        transforms.setdefault("filter_pt_metrics", DATA_API_GATEWAY_METRICS_FILTER_TRANSFORM)
+        transforms.setdefault("enrich_pt_metrics", DATA_API_GATEWAY_METRICS_VECTOR_TRANSFORM)
+
+        sources["pt_metrics_scrape"] = {
+            "type": "prometheus_scrape",
+            "endpoints": [data_api_gateway_ep],
+            "scrape_interval_secs": 60,
+            "scrape_timeout_secs": 50
+        }
+
+        sinks["cms_gateway_pt_metrics"] = self.pt_metrics_sink_config
+        # uncomment to debug pt metrics
+        # vector_cfg["sinks"]["console_sink"] = {
+        #     "type": "console",
+        #     "inputs": ["enrich_pt_metrics"],
+        #     "encoding": {
+        #         "codec": "text"
+        #     }
+        # }
+
     def remove_dcgm_exporter_scrape_config(self, vector_cfg: dict):
         vector_cfg.get("sources", {}).pop(DCGM_EXPORTER_SOURCE_NAME, None)
         inputs = set(vector_cfg["transforms"][NODE_METRICS_VECTOR_TRANSFORM_NAME].get("inputs", []))
         inputs.discard(DCGM_EXPORTER_SOURCE_NAME)
         vector_cfg["transforms"][NODE_METRICS_VECTOR_TRANSFORM_NAME]["inputs"] = sorted(inputs)
+
+    def remove_data_api_gateway_scrape_config(self, vector_cfg: dict):
+        vector_cfg.get("sources", {}).pop("pt_metrics_scrape", None)
+        vector_cfg.get("transforms", {}).pop("enrich_pt_metrics", None)
+        vector_cfg.get("transforms", {}).pop("filter_pt_metrics:", None)
+        vector_cfg.get("sinks", {}).pop("cms_gateway_pt_metrics", None)
 
     def set_custom_metrics_scrape_config(self, vector_cfg: dict, custom_metrics_eps: list):
         if not custom_metrics_eps:
@@ -185,24 +278,25 @@ class VectorConfigReloader:
         base_cfg = YamlUtils.load_yaml_config(VECTOR_BASE_CONFIG_PATH)
 
         dcgm_exporter_ep = None
+        data_api_gateway_ep = None
         custom_metrics_eps = []
-        for pod in self.k8s_api_client.list_pod_for_all_namespaces(field_selector=f"spec.nodeName={self.node_name},status.phase=Running").items:
+        for pod in self.k8s_api_client.list_namespaced_pod(namespace=self.namespace, field_selector=f"spec.nodeName={self.node_name},status.phase=Running").items:
             if VectorConfigReloader.is_custom_metrics_pod(pod):
                 custom_metrics_eps.append(self.get_custom_metrics_endpoint_cfg(pod))
             elif VectorConfigReloader.is_dcgm_exporter_pod(pod):
                 dcgm_exporter_ep = self.get_dcgm_exporter_scrape_endpoint(pod.status.pod_ip)
+            elif VectorConfigReloader.is_data_api_gateway_pod(pod):
+                LOG.info(f"Found DAG Pod {pod.metadata.name} is a relevant metrics exporter.")
+                data_api_gateway_ep = self.get_data_api_gateway_scrape_endpoint(pod.status.pod_ip)
             else:
                 LOG.info(f"Pod {pod.metadata.name} is not a relevant metrics exporter.")
 
         self.set_custom_metrics_scrape_config(base_cfg, custom_metrics_eps)
         self.set_dcgm_exporter_scrape_config(base_cfg, dcgm_exporter_ep)
-
-        # set endpoint as per env
-        base_cfg["sinks"]["cms_gateway_node_metrics"]["endpoint"] = self.sink_endpoint
+        self.set_data_api_gateway_scrape_config(base_cfg, data_api_gateway_ep)
 
         LOG.debug(f"Writing vector config {str(base_cfg)}")
-        # always update the node metrics transform source to handle LiteralStr issue
-        base_cfg["transforms"][NODE_METRICS_VECTOR_TRANSFORM_NAME]["source"] = NODE_METRICS_VECTOR_TRANSFORM_SOURCE
+
         YamlUtils.save_yaml(VECTOR_CONFIG_PATH, base_cfg)
         LOG.info(f"Vector config bootstrapped!")
 
@@ -219,6 +313,9 @@ class VectorConfigReloader:
                 self.set_custom_metrics_scrape_config(current_vector_cfg, [self.get_custom_metrics_endpoint_cfg(pod)])
             elif VectorConfigReloader.is_dcgm_exporter_pod(pod):
                 self.set_dcgm_exporter_scrape_config(current_vector_cfg, self.get_dcgm_exporter_scrape_endpoint(pod.status.pod_ip))
+            elif VectorConfigReloader.is_data_api_gateway_pod(pod):
+                LOG.info(f"Adding DAG Pod {pod.metadata.name} is a relevant metrics exporter.")
+                self.set_data_api_gateway_scrape_config(current_vector_cfg, self.get_data_api_gateway_scrape_endpoint(pod.status.pod_ip))
             else:
                 LOG.info(f"Pod {pod.metadata.name} is not a relevant metrics exporter.")
                 return
@@ -227,13 +324,14 @@ class VectorConfigReloader:
                 self.remove_custom_metrics_scrape_config(current_vector_cfg, self.get_custom_metrics_endpoint_cfg(pod))
             elif VectorConfigReloader.is_dcgm_exporter_pod(pod):
                 self.remove_dcgm_exporter_scrape_config(current_vector_cfg)
+            elif VectorConfigReloader.is_data_api_gateway_pod(pod):
+                LOG.info(f"Removing DAG Pod {pod.metadata.name} is a relevant metrics exporter.")
+                self.remove_data_api_gateway_scrape_config(current_vector_cfg)
             else:
                 LOG.info(f"Pod {pod.metadata.name} is not a relevant metrics exporter.")
                 return
 
         LOG.debug(f"Writing vector config: {str(current_vector_cfg)}")
-        # always update the node metrics transform source to handle LiteralStr issue
-        current_vector_cfg["transforms"][NODE_METRICS_VECTOR_TRANSFORM_NAME]["source"] = NODE_METRICS_VECTOR_TRANSFORM_SOURCE
         YamlUtils.save_yaml(VECTOR_CONFIG_PATH, current_vector_cfg)
         LOG.info(f"Vector config reloaded!")
 
@@ -245,7 +343,8 @@ class VectorConfigReloader:
 
         try:
             stream = self.k8s_event_watcher.stream(
-                self.k8s_api_client.list_pod_for_all_namespaces,
+                self.k8s_api_client.list_namespaced_pod,
+                namespace=self.namespace,
                 field_selector=f"spec.nodeName={self.node_name}",
                 _request_timeout=0
             )

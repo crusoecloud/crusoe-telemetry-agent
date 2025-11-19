@@ -1,4 +1,4 @@
-namespace: crusoe-system
+namespace: data-api-gateway
 environment: prod
 endpoints:
   prod: "https://cms-monitoring.crusoecloud.com/ingest"
@@ -19,7 +19,7 @@ metricsExporter:
   defaultDcgmExporterPort: 9400
   defaultScrapeInterval: 60
 
-logLevel: INFO
+logLevel: DEBUG
 
 # CPU profile for Vector subchart
 # Adjust according to https://helm.vector.dev
@@ -144,7 +144,7 @@ vector:
 
   rbac:
     # rbac.create -- If true, create and use RBAC resources. Only valid for the "Agent" role.
-    create: true
+    create: false
 
   psp:
     # psp.create -- If true, create a [PodSecurityPolicy](https://kubernetes.io/docs/concepts/security/pod-security-policy/)
@@ -191,7 +191,7 @@ vector:
   command: [
     "/bin/sh",
     "-c",
-    "export VM_ID=$(cat /host/sys/class/dmi/id/product_uuid) && /usr/bin/vector --config /etc/vector/vector.yaml --watch-config"
+    "/usr/bin/vector --config /etc/vector/vector.yaml --watch-config"
   ]
 
   # args -- Override Vector's default arguments.
@@ -206,6 +206,16 @@ vector:
         secretKeyRef:
           name: crusoe-monitoring-token
           key: CRUSOE_MONITORING_TOKEN
+    - name: CRUSOE_CLUSTER_ID
+      valueFrom:
+        secretKeyRef:
+          name: crusoe-secrets
+          key: CRUSOE_CLUSTER_ID
+    - name: CRUSOE_PROJECT_ID
+      valueFrom:
+        secretKeyRef:
+          name: crusoe-secrets
+          key: CRUSOE_PROJECT_ID
 
   # envFrom -- Define environment variables from Secrets or ConfigMaps.
   envFrom:
@@ -339,60 +349,18 @@ vector:
   # customConfig -- Override Vector's default configs, if used **all** options need to be specified. This section supports
   # using helm templates to populate dynamic values. See Vector's [configuration documentation](https://vector.dev/docs/reference/configuration/)
   # for all options.
+  # Base config has minimal dummy source/sink - vector-config-reloader will populate real sources/transforms/sinks dynamically
   customConfig:
     data_dir: /vector-data-dir
     sources:
-      host_metrics:
-        type: host_metrics
-        collectors:
-          - cpu
-          - disk
-          - memory
-          - network
-        network:
-          devices:
-            excludes:
-              - "lo*"
-            includes:
-              - "ens*"
-        scrape_interval_secs: 60
-    transforms:
-      enrich_node_metrics:
-        type: remap
-        inputs:
-          - host_metrics
-        source: |
-          if exists(.tags.Hostname) {
-            parts, _ = split(.tags.Hostname, ".")
-            host_prefix = get(parts, [0]) ?? ""
-
-            prefix_parts, _ = split(host_prefix, "-")
-            nodepool_id_parts, _ = slice(prefix_parts, 0, length(prefix_parts) - 1)
-
-            .tags.nodepool, _ = join(nodepool_id_parts, "-")
-          }
-          .tags.cluster_id = "${CRUSOE_CLUSTER_ID}"
-          .tags.vm_id = "${VM_ID}"
-          .tags.crusoe_resource = "vm"
+      dummy_internal_metrics:
+        type: internal_metrics
     sinks:
-      cms_gateway_node_metrics:
-        type: prometheus_remote_write
+      dummy_blackhole:
+        type: blackhole
         inputs:
-          - enrich_node_metrics
-        endpoint: "https://cms-monitoring.crusoecloud.com/ingest"
-        auth:
-          strategy: bearer
-          token: "${CRUSOE_MONITORING_TOKEN}"
-        healthcheck:
-          enabled: false
-        request:
-          concurrency: none
-          rate_limit_duration_secs: 60
-          rate_limit_num: 2
-        compression: snappy
-        tls:
-          verify_certificate: true
-          verify_hostname: true
+          - dummy_internal_metrics
+        print_interval_secs: 3600
   # defaultVolumes -- Default volumes that are mounted into pods. In most cases, these should not be changed.
   # Use `extraVolumes`/`extraVolumeMounts` for additional custom volumes.
   # @default -- See `values.yaml`
@@ -467,12 +435,16 @@ vector:
   # This also supports template content, which will eventually be converted to yaml.
   extraContainers:
     - name: vector-config-reloader
-      image: ghcr.io/crusoecloud/crusoe-telemetry-agent/vector-config-reloader:v0.1.5
+      image: ghcr.io/crusoecloud/crusoe-telemetry-agent/vector-config-reloader:588060b
       env:
         - name: NODE_NAME
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
       volumeMounts:
         - name: vector-config
           mountPath: /etc/vector
@@ -587,7 +559,7 @@ vector:
     honorTimestamps: true
 
   # Log level for Vector.
-  logLevel: "info"
+  logLevel: "debug"
 
   # Optional built-in HAProxy load balancer.
   haproxy:

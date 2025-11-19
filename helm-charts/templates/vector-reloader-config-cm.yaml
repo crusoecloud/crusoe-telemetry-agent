@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: vector-reloader-config
-  namespace: crusoe-system
+  namespace: data-api-gateway
 data:
   config.yaml: |
     dcgm_metrics:
