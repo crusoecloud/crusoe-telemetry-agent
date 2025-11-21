@@ -41,7 +41,6 @@ transforms:
         inputs:
           - internal_metrics
         source: |
-          del(.tags.Hostname)
           .tags.vm_id = "${VM_ID}"
           .tags.crusoe_resource = "vm"
           .tags.agent_version = "${AGENT_VERSION}"
