@@ -8,6 +8,8 @@ RELOADER_CONFIG_PATH = "/etc/reloader/config.yaml"
 
 DCGM_EXPORTER_SOURCE_NAME = "dcgm_exporter_scrape"
 DCGM_EXPORTER_APP_LABEL = "nvidia-dcgm-exporter"
+AMD_EXPORTER_SOURCE_NAME = "amd_exporter_scrape"
+AMD_EXPORTER_APP_LABEL = "amd-gpu-exporter"
 NODE_METRICS_VECTOR_TRANSFORM_NAME = "enrich_node_metrics"
 NODE_METRICS_VECTOR_TRANSFORM_SOURCE = LiteralStr("""
 if exists(.tags.Hostname) {
@@ -73,6 +75,12 @@ class VectorConfigReloader:
         self.dcgm_exporter_port = reloader_cfg["dcgm_metrics"]["port"]
         self.dcgm_exporter_path = reloader_cfg["dcgm_metrics"]["path"]
         self.dcgm_exporter_scrape_interval = reloader_cfg["dcgm_metrics"]["scrape_interval"]
+        amd_cfg = reloader_cfg.get("amd_metrics", {})
+        self.amd_exporter_enabled = amd_cfg.get("enabled", True)
+        self.amd_exporter_port = amd_cfg.get("port", 5000)
+        self.amd_exporter_path = amd_cfg.get("path", "/metrics")
+        self.amd_exporter_scrape_interval = amd_cfg.get("scrape_interval", self.dcgm_exporter_scrape_interval)
+        self.amd_exporter_app_label = amd_cfg.get("app_label", AMD_EXPORTER_APP_LABEL)
         self.default_custom_metrics_config = reloader_cfg["custom_metrics"]
         self.sink_endpoint = reloader_cfg["sink"]["endpoint"]
         self.custom_metrics_sink_config = {
@@ -110,6 +118,14 @@ class VectorConfigReloader:
         labels = pod.metadata.labels or {}
         return labels and "app" in labels and labels["app"] == DCGM_EXPORTER_APP_LABEL
 
+    @staticmethod
+    def is_amd_exporter_pod(pod, app_label: str) -> bool:
+        labels = pod.metadata.labels or {}
+        return labels and "app" in labels and labels["app"] == app_label
+
+    def get_amd_exporter_scrape_endpoint(self, pod_ip: str) -> str:
+        return f"http://{pod_ip}:{self.amd_exporter_port}{self.amd_exporter_path}"
+
     def handle_sigterm(self, sig, frame):
         self.running = False
 
@@ -132,6 +148,25 @@ class VectorConfigReloader:
             "scrape_interval_secs": interval,
             "scrape_timeout_secs": int(interval * SCRAPE_TIMEOUT_PERCENTAGE)
         }
+
+    def set_amd_exporter_scrape_config(self, vector_cfg: dict, amd_exporter_scrape_endpoint: str):
+        if amd_exporter_scrape_endpoint is None:
+            return
+        vector_cfg.setdefault("sources", {})[AMD_EXPORTER_SOURCE_NAME] = {
+            "type": "prometheus_scrape",
+            "endpoints": [amd_exporter_scrape_endpoint],
+            "scrape_interval_secs": self.amd_exporter_scrape_interval,
+            "scrape_timeout_secs": int(self.amd_exporter_scrape_interval * SCRAPE_TIMEOUT_PERCENTAGE)
+        }
+        inputs = set(vector_cfg["transforms"][NODE_METRICS_VECTOR_TRANSFORM_NAME]["inputs"])
+        if AMD_EXPORTER_SOURCE_NAME not in inputs:
+            vector_cfg["transforms"][NODE_METRICS_VECTOR_TRANSFORM_NAME]["inputs"].append(AMD_EXPORTER_SOURCE_NAME)
+
+    def remove_amd_exporter_scrape_config(self, vector_cfg: dict):
+        vector_cfg.get("sources", {}).pop(AMD_EXPORTER_SOURCE_NAME, None)
+        inputs = set(vector_cfg["transforms"][NODE_METRICS_VECTOR_TRANSFORM_NAME].get("inputs", []))
+        inputs.discard(AMD_EXPORTER_SOURCE_NAME)
+        vector_cfg["transforms"][NODE_METRICS_VECTOR_TRANSFORM_NAME]["inputs"] = sorted(inputs)
 
     def set_dcgm_exporter_scrape_config(self, vector_cfg: dict, dcgm_exporter_scrape_endpoint: str):
         if dcgm_exporter_scrape_endpoint is None:
@@ -185,17 +220,22 @@ class VectorConfigReloader:
         base_cfg = YamlUtils.load_yaml_config(VECTOR_BASE_CONFIG_PATH)
 
         dcgm_exporter_ep = None
+        amd_exporter_ep = None
         custom_metrics_eps = []
         for pod in self.k8s_api_client.list_pod_for_all_namespaces(field_selector=f"spec.nodeName={self.node_name},status.phase=Running").items:
             if VectorConfigReloader.is_custom_metrics_pod(pod):
                 custom_metrics_eps.append(self.get_custom_metrics_endpoint_cfg(pod))
             elif VectorConfigReloader.is_dcgm_exporter_pod(pod):
                 dcgm_exporter_ep = self.get_dcgm_exporter_scrape_endpoint(pod.status.pod_ip)
+            elif VectorConfigReloader.is_amd_exporter_pod(pod, self.amd_exporter_app_label):
+                amd_exporter_ep = self.get_amd_exporter_scrape_endpoint(pod.status.pod_ip)
             else:
                 LOG.info(f"Pod {pod.metadata.name} is not a relevant metrics exporter.")
 
         self.set_custom_metrics_scrape_config(base_cfg, custom_metrics_eps)
         self.set_dcgm_exporter_scrape_config(base_cfg, dcgm_exporter_ep)
+        if self.amd_exporter_enabled and amd_exporter_ep:
+            self.set_amd_exporter_scrape_config(base_cfg, amd_exporter_ep)
 
         # set endpoint as per env
         base_cfg["sinks"]["cms_gateway_node_metrics"]["endpoint"] = self.sink_endpoint
@@ -219,6 +259,9 @@ class VectorConfigReloader:
                 self.set_custom_metrics_scrape_config(current_vector_cfg, [self.get_custom_metrics_endpoint_cfg(pod)])
             elif VectorConfigReloader.is_dcgm_exporter_pod(pod):
                 self.set_dcgm_exporter_scrape_config(current_vector_cfg, self.get_dcgm_exporter_scrape_endpoint(pod.status.pod_ip))
+            elif VectorConfigReloader.is_amd_exporter_pod(pod, self.amd_exporter_app_label):
+                if self.amd_exporter_enabled:
+                    self.set_amd_exporter_scrape_config(current_vector_cfg, self.get_amd_exporter_scrape_endpoint(pod.status.pod_ip))
             else:
                 LOG.info(f"Pod {pod.metadata.name} is not a relevant metrics exporter.")
                 return
@@ -227,6 +270,8 @@ class VectorConfigReloader:
                 self.remove_custom_metrics_scrape_config(current_vector_cfg, self.get_custom_metrics_endpoint_cfg(pod))
             elif VectorConfigReloader.is_dcgm_exporter_pod(pod):
                 self.remove_dcgm_exporter_scrape_config(current_vector_cfg)
+            elif VectorConfigReloader.is_amd_exporter_pod(pod, self.amd_exporter_app_label):
+                self.remove_amd_exporter_scrape_config(current_vector_cfg)
             else:
                 LOG.info(f"Pod {pod.metadata.name} is not a relevant metrics exporter.")
                 return
