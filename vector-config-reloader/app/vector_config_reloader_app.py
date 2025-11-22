@@ -9,7 +9,7 @@ RELOADER_CONFIG_PATH = "/etc/reloader/config.yaml"
 DCGM_EXPORTER_SOURCE_NAME = "dcgm_exporter_scrape"
 DCGM_EXPORTER_APP_LABEL = "nvidia-dcgm-exporter"
 AMD_EXPORTER_SOURCE_NAME = "amd_exporter_scrape"
-AMD_EXPORTER_APP_LABEL = "amd-gpu-exporter"
+AMD_EXPORTER_APP_LABEL = "metrics-exporter"
 NODE_METRICS_VECTOR_TRANSFORM_NAME = "enrich_node_metrics"
 NODE_METRICS_VECTOR_TRANSFORM_SOURCE = LiteralStr("""
 if exists(.tags.Hostname) {
@@ -121,7 +121,9 @@ class VectorConfigReloader:
     @staticmethod
     def is_amd_exporter_pod(pod, app_label: str) -> bool:
         labels = pod.metadata.labels or {}
-        return labels and "app" in labels and labels["app"] == app_label
+        if not labels:
+            return False
+        return labels.get("app.kubernetes.io/name") == app_label or labels.get("app") == app_label
 
     def get_amd_exporter_scrape_endpoint(self, pod_ip: str) -> str:
         return f"http://{pod_ip}:{self.amd_exporter_port}{self.amd_exporter_path}"
