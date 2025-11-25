@@ -74,7 +74,7 @@ class VectorConfigReloader:
         self.dcgm_exporter_port = reloader_cfg["dcgm_metrics"]["port"]
         self.dcgm_exporter_path = reloader_cfg["dcgm_metrics"]["path"]
         self.dcgm_exporter_scrape_interval = reloader_cfg["dcgm_metrics"]["scrape_interval"]
-        self.amd_manager = AmdExporterManager(reloader_cfg.get("amd_metrics", {}), self.dcgm_exporter_scrape_interval)
+        self.amd_manager = AmdExporterManager(reloader_cfg.get("amd_metrics", {}))
         self.default_custom_metrics_config = reloader_cfg["custom_metrics"]
         self.sink_endpoint = reloader_cfg["sink"]["endpoint"]
         self.custom_metrics_sink_config = {

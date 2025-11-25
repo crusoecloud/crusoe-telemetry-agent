@@ -2,14 +2,15 @@ from typing import Dict
 
 AMD_EXPORTER_SOURCE_NAME = "amd_exporter_scrape"
 DEFAULT_AMD_APP_LABEL = "metrics-exporter"
+DEFAULT_AMD_SCRAPE_INTERVAL = 60
 
 
 class AmdExporterManager:
-    def __init__(self, cfg: Dict, fallback_interval: int):
+    def __init__(self, cfg: Dict):
         self.enabled = cfg.get("enabled", True)
         self.port = cfg.get("port", 5000)
         self.path = cfg.get("path", "/metrics")
-        self.scrape_interval = cfg.get("scrape_interval", fallback_interval)
+        self.scrape_interval = cfg.get("scrape_interval", DEFAULT_AMD_SCRAPE_INTERVAL)
         self.app_label = DEFAULT_AMD_APP_LABEL
 
     def is_exporter_pod(self, pod) -> bool:
