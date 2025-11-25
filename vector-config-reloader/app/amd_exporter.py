@@ -10,14 +10,13 @@ class AmdExporterManager:
         self.port = cfg.get("port", 5000)
         self.path = cfg.get("path", "/metrics")
         self.scrape_interval = cfg.get("scrape_interval", fallback_interval)
-        self.app_label = cfg.get("app_label", DEFAULT_AMD_APP_LABEL)
+        self.app_label = DEFAULT_AMD_APP_LABEL
 
     def is_exporter_pod(self, pod) -> bool:
         labels = pod.metadata.labels or {}
         if not labels:
             return False
-        # Support both modern and legacy label keys
-        return labels.get("app.kubernetes.io/name") == self.app_label or labels.get("app") == self.app_label
+        return labels.get("app.kubernetes.io/name") == self.app_label
 
     def build_endpoint(self, pod_ip: str) -> str:
         return f"http://{pod_ip}:{self.port}{self.path}"
