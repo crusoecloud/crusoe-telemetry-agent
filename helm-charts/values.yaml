@@ -413,9 +413,9 @@ vector:
         healthcheck:
           enabled: false
         request:
-          concurrency: none
-          rate_limit_duration_secs: 60
-          rate_limit_num: 2
+          concurrency: adaptive
+        batch:
+            max_bytes: 500000 # ~500KB
         compression: snappy
         tls:
           verify_certificate: true

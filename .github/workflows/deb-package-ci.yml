@@ -67,10 +67,8 @@ jobs:
           # Set outputs/environment for subsequent steps
           echo "IS_RELEASE=$IS_RELEASE" >> $GITHUB_ENV
           echo "PACKAGE_VERSION=$DEB_VERSION" >> $GITHUB_ENV
-          # Set architecture to 'all'
-          echo "DEB_FILE_NAME=${PACKAGE_NAME}_${DEB_VERSION}_all.deb" >> $GITHUB_ENV
-          # Note: GPG_KEY_ID extraction removed from here. It will be handled in the next job.
-
+          # Set architecture to 'amd64'
+          echo "DEB_FILE_NAME=${PACKAGE_NAME}_${DEB_VERSION}_amd64.deb" >> $GITHUB_ENV
 
       - name: Update DEBIAN/control and changelog with CI Version
         run: |
@@ -79,8 +77,8 @@ jobs:
           # Update the Version field in the control file
           sed -i "s/Version: .*/Version: ${PACKAGE_VERSION}/" "$CONTROL_FILE"
           
-          # Update Architecture field to 'all'
-          sed -i 's/^Architecture: .*/Architecture: all/' "$CONTROL_FILE"
+          # Update Architecture field to 'amd64'
+          sed -i 's/^Architecture: .*/Architecture: amd64/' "$CONTROL_FILE"
           
           # Update changelog (important for dpkg-buildpackage)
           # Note: dch creates a new entry with the correct version/date
@@ -136,105 +134,3 @@ jobs:
     outputs:
       deb_filename: ${{ env.DEB_FILE_NAME }}
 
-  publish_apt_repo:
-    needs: build_package
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    # --- ADDED PERMISSIONS BLOCK ---
-    permissions:
-      contents: write # Required for writing to the main branch
-      pages: write    # Required for the GitHub Pages deployment
-      id-token: write # Required for modern OIDC deployments
-    # -----------------------------
-    steps:
-      - name: Checkout Code (Needed to deploy to main/docs)
-        uses: actions/checkout@v4
-        with:
-          # Use the custom deploy key for authentication
-          token: ${{ secrets.REPO_PAT }}
-          fetch-depth: 0
-
-      - name: Download built package artifact
-        uses: actions/download-artifact@v4
-        with:
-          # FIX: The download name now matches the upload name
-          name: ${{ needs.build_package.outputs.deb_filename }}
-          path: ./temp_artifact/
-
-      - name: Setup GPG Environment
-        id: gpg_setup # Give this step an ID to reference its output
-        # Corrected action reference to a working version
-        uses: crazy-max/ghaction-import-gpg@v6
-        with:
-          gpg_private_key: ${{ secrets.APT_GPG_KEY }}
-          passphrase: ${{ secrets.APT_GPG_PASSPHRASE }}
-
-      # Step to explicitly set the GPG Key ID in the environment
-      - name: Set GPG Key ID Environment Variable
-        run: |
-          # Use the output from the GPG action step
-          echo "GPG_KEY_ID=${{ steps.gpg_setup.outputs.keyid }}" >> $GITHUB_ENV
-
-      - name: Setup Repository Directory
-        env:
-          # Explicitly pass GPG_KEY_ID from the environment set by the previous step
-          GPG_KEY_ID: ${{ env.GPG_KEY_ID }}
-          # The GNUPGHOME must come from the step output
-          GNUPGHOME: ${{ steps.gpg_setup.outputs.gpg_home }}
-        run: |
-          # Check for GPG_KEY_ID to ensure the next commands don't fail mysteriously
-          if [[ -z "${{ env.GPG_KEY_ID }}" ]]; then
-            echo "Error: GPG_KEY_ID environment variable is missing. Check 'Setup GPG Environment' step." >&2
-            exit 1
-          fi
-
-          # 1. Define repository structure
-          REPO_DIR="./repo"
-          # DIST_DIR uses 'binary-all'
-          DIST_DIR="${REPO_DIR}/dists/stable/main/binary-all"
-          mkdir -p "$DIST_DIR"
-          
-          # 2. Move package into the repository path
-          # We need to explicitly copy the file into the repo structure
-          cp ./temp_artifact/*.deb "$DIST_DIR/"
-          
-          # 3. Generate Packages.gz index file
-          cd "$REPO_DIR"
-          apt-ftparchive packages dists/stable/main/binary-all > dists/stable/main/binary-all/Packages
-          gzip -c dists/stable/main/binary-all/Packages > dists/stable/main/binary-all/Packages.gz
-          
-          # 4. Generate Release file
-          apt-ftparchive -o APT::FTPArchive::Release::Codename=stable \
-                       -o APT::FTPArchive::Release::Components=main \
-                       -o APT::FTPArchive::Release::Architectures=all \
-                       release dists/stable > dists/stable/Release
-          
-          # 5. Sign the Release file (detached signature)
-          gpg --batch --passphrase ${{ secrets.APT_GPG_PASSPHRASE }} \
-            --pinentry-mode loopback \
-            --default-key ${{ env.GPG_KEY_ID }} \
-            --detach-sign dists/stable/Release
-          
-          # Create InRelease file (signed inline)
-          gpg --batch --passphrase ${{ secrets.APT_GPG_PASSPHRASE }} \
-            --pinentry-mode loopback \
-            --default-key ${{ env.GPG_KEY_ID }} \
-            --clearsign --output dists/stable/InRelease dists/stable/Release
-
-          # 6. Copy Public Key to root for easy discovery
-          gpg --armor --export ${{ env.GPG_KEY_ID }} > public.key
-          
-          # 7. Return to root for deployment
-          cd ..
-
-      - name: Deploy to GitHub Pages (docs folder on main branch)
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          # FIX: Use the custom deploy key for deployment authentication
-          github_token: ${{ secrets.REPO_PAT }}
-          publish_dir: ./repo
-          publish_branch: main # Deploy to the main branch
-          destination_dir: docs # Deploy to the 'docs' subdirectory within the main branch
-          user_name: 'github-actions[bot]'
-          user_email: 'github-actions[bot]@users.noreply.github.com'
-          commit_message: "Automatic APT repository update for ${{ needs.build_package.outputs.deb_filename }}"
