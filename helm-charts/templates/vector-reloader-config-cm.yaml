@@ -14,5 +14,5 @@ data:
       path: {{ .Values.metricsExporter.defaultMetricsPath }}
       scrape_interval: {{ .Values.metricsExporter.defaultScrapeInterval }}
     sink:
-      endpoint: {{ index .Values.endpoints .Values.environment | quote }}
+      endpoint: {{ if and .Values.useProxy .Values.endpoints.proxy }}{{ .Values.endpoints.proxy | quote }}{{ else }}{{ index .Values.endpoints .Values.environment | quote }}{{ end }}
     log_level: {{ .Values.logLevel }}

@@ -1,6 +1,7 @@
 import os, signal, re, logging, sys
 from kubernetes import client, config, watch
 from utils import LiteralStr, YamlUtils
+from amd_exporter import AmdExporterManager
 
 VECTOR_CONFIG_PATH = "/etc/vector/vector.yaml"
 VECTOR_BASE_CONFIG_PATH = "/etc/vector-base/vector.yaml"
@@ -73,6 +74,7 @@ class VectorConfigReloader:
         self.dcgm_exporter_port = reloader_cfg["dcgm_metrics"]["port"]
         self.dcgm_exporter_path = reloader_cfg["dcgm_metrics"]["path"]
         self.dcgm_exporter_scrape_interval = reloader_cfg["dcgm_metrics"]["scrape_interval"]
+        self.amd_manager = AmdExporterManager(reloader_cfg.get("amd_metrics", {}))
         self.default_custom_metrics_config = reloader_cfg["custom_metrics"]
         self.sink_endpoint = reloader_cfg["sink"]["endpoint"]
         self.custom_metrics_sink_config = {
@@ -185,17 +187,22 @@ class VectorConfigReloader:
         base_cfg = YamlUtils.load_yaml_config(VECTOR_BASE_CONFIG_PATH)
 
         dcgm_exporter_ep = None
+        amd_exporter_ep = None
         custom_metrics_eps = []
         for pod in self.k8s_api_client.list_pod_for_all_namespaces(field_selector=f"spec.nodeName={self.node_name},status.phase=Running").items:
             if VectorConfigReloader.is_custom_metrics_pod(pod):
                 custom_metrics_eps.append(self.get_custom_metrics_endpoint_cfg(pod))
             elif VectorConfigReloader.is_dcgm_exporter_pod(pod):
                 dcgm_exporter_ep = self.get_dcgm_exporter_scrape_endpoint(pod.status.pod_ip)
+            elif self.amd_manager.is_exporter_pod(pod):
+                amd_exporter_ep = self.amd_manager.build_endpoint(pod.status.pod_ip)
             else:
                 LOG.info(f"Pod {pod.metadata.name} is not a relevant metrics exporter.")
 
         self.set_custom_metrics_scrape_config(base_cfg, custom_metrics_eps)
         self.set_dcgm_exporter_scrape_config(base_cfg, dcgm_exporter_ep)
+        if self.amd_manager.enabled and amd_exporter_ep:
+            self.amd_manager.set_scrape(base_cfg, amd_exporter_ep, NODE_METRICS_VECTOR_TRANSFORM_NAME, SCRAPE_TIMEOUT_PERCENTAGE)
 
         # set endpoint as per env
         base_cfg["sinks"]["cms_gateway_node_metrics"]["endpoint"] = self.sink_endpoint
@@ -219,6 +226,9 @@ class VectorConfigReloader:
                 self.set_custom_metrics_scrape_config(current_vector_cfg, [self.get_custom_metrics_endpoint_cfg(pod)])
             elif VectorConfigReloader.is_dcgm_exporter_pod(pod):
                 self.set_dcgm_exporter_scrape_config(current_vector_cfg, self.get_dcgm_exporter_scrape_endpoint(pod.status.pod_ip))
+            elif self.amd_manager.is_exporter_pod(pod):
+                if self.amd_manager.enabled:
+                    self.amd_manager.set_scrape(current_vector_cfg, self.amd_manager.build_endpoint(pod.status.pod_ip), NODE_METRICS_VECTOR_TRANSFORM_NAME, SCRAPE_TIMEOUT_PERCENTAGE)
             else:
                 LOG.info(f"Pod {pod.metadata.name} is not a relevant metrics exporter.")
                 return
@@ -227,6 +237,8 @@ class VectorConfigReloader:
                 self.remove_custom_metrics_scrape_config(current_vector_cfg, self.get_custom_metrics_endpoint_cfg(pod))
             elif VectorConfigReloader.is_dcgm_exporter_pod(pod):
                 self.remove_dcgm_exporter_scrape_config(current_vector_cfg)
+            elif self.amd_manager.is_exporter_pod(pod):
+                self.amd_manager.remove_scrape(current_vector_cfg, NODE_METRICS_VECTOR_TRANSFORM_NAME)
             else:
                 LOG.info(f"Pod {pod.metadata.name} is not a relevant metrics exporter.")
                 return
