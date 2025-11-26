@@ -97,11 +97,11 @@ jobs:
           
           # FIX: Move the resulting .deb file to the current directory (project root)
           # The build puts the file in ../, so we move it back to the current directory (vm/)
-          mv ../${PACKAGE_NAME}_${PACKAGE_VERSION}_all.deb ./
+          mv ../${PACKAGE_NAME}_${PACKAGE_VERSION}_amd64.deb ./
           
           # IMPORTANT: The remaining steps in this job run from the repository root, not vm/
           # We must move the .deb file up to the repository root for the Release and Artifact steps
-          mv ./${PACKAGE_NAME}_${PACKAGE_VERSION}_all.deb ../
+          mv ./${PACKAGE_NAME}_${PACKAGE_VERSION}_amd64.deb ../
           
           # Return to repository root
           cd ..
