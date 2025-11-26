@@ -4,6 +4,9 @@ endpoints:
   prod: "https://cms-monitoring.crusoecloud.com/ingest"
   staging: "https://cms-monitoring.crusoecloud.site/ingest"
   dev: "https://cms-monitoring.crusoecloud.xyz/ingest"
+  proxy: "https://cms-monitoring.crusoecloud.internal"
+
+useProxy: false
 
 job:
   name: crusoe-monitoring-token-job
