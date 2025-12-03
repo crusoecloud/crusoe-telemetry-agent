@@ -10,7 +10,7 @@ useProxy: false
 
 job:
   name: crusoe-monitoring-token-job
-  image: ghcr.io/crusoecloud/crusoe-telemetry-agent/token-job:latest
+  image: ghcr.io/crusoecloud/crusoe-telemetry-agent/token-job:pr-74
   ttlSecondsAfterFinished: 300
 secrets:
   crusoeMonitoringToken: crusoe-monitoring-token
