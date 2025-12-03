@@ -18,11 +18,9 @@ spec:
               value: {{ .Values.namespace }}
             - name: CRUSOE_MONITORING_TOKEN_SECRET_NAME
               value: {{ .Values.secrets.crusoeMonitoringToken }}
-            - name: CRUSOE_ACCESS_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.secrets.existingSecret }}
-                  key: CRUSOE_ACCESS_KEY
+          envFrom:
+            - secretRef:
+                name: {{ .Values.secrets.existingSecret }}
           resources:
             requests:
               cpu: 100m

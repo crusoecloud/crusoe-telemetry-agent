@@ -14,10 +14,11 @@ fi
 # Continue with installation and secret creation steps only if the secret is missing
 echo "Secret $SECRET_NAME does not exist. Proceeding with token creation."
 
-# Set up Crusoe credentials
+# Set up Crusoe credentials (loaded from envFrom secret)
 export CRUSOE_ACCESS_KEY_ID="${CRUSOE_ACCESS_KEY}"
 
 # Verify Crusoe CLI is working
+echo "Verifying Crusoe CLI authentication..."
 crusoe whoami
 
 # Create monitoring token
