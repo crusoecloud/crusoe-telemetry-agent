@@ -10,7 +10,7 @@ useProxy: false
 
 job:
   name: crusoe-monitoring-token-job
-  image: ubuntu:22.04
+  image: ghcr.io/crusoecloud/crusoe-telemetry-agent/token-job:latest
   ttlSecondsAfterFinished: 300
 secrets:
   crusoeMonitoringToken: crusoe-monitoring-token
