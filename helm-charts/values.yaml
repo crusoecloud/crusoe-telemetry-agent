@@ -1,4 +1,4 @@
-namespace: data-api-gateway
+namespace: crusoe-system
 environment: prod
 endpoints:
   prod: "https://cms-monitoring.crusoecloud.com/ingest"
