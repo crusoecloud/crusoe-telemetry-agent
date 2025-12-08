@@ -38,6 +38,8 @@ spec:
 
               echo "deb [trusted=yes] https://apt.fury.io/crusoe/ * *" > /etc/apt/sources.list.d/fury.list
               apt update && apt install -y crusoe
+              # The environment variable name is not the same
+              export CRUSOE_ACCESS_KEY_ID="${CRUSOE_ACCESS_KEY}"
               crusoe whoami
               export CRUSOE_MONITORING_TOKEN=$(crusoe monitoring tokens create | grep "monitor token:" | awk '{print $3}')
               kubectl create secret generic $SECRET_NAME \
