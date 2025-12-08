@@ -187,6 +187,7 @@ class VectorConfigReloader:
         return f"http://{pod_ip}:{self.dcgm_exporter_port}{self.dcgm_exporter_path}"
 
     def get_data_api_gateway_scrape_endpoint(self, pod_ip) -> str:
+        # TODO: find the metric port programmatically
         return f"http://{pod_ip}:9091/metrics"
 
     def get_custom_metrics_endpoint_cfg(self, pod) -> dict:
