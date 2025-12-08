@@ -12,6 +12,9 @@ spec:
       containers:
         - name: ubuntu-worker
           image: {{ .Values.job.image }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.secrets.existingSecret }}
           command: ["/bin/bash", "-c"]
           args:
             - |
@@ -35,10 +38,6 @@ spec:
 
               echo "deb [trusted=yes] https://apt.fury.io/crusoe/ * *" > /etc/apt/sources.list.d/fury.list
               apt update && apt install -y crusoe
-              export CRUSOE_ACCESS_KEY_ID=$(kubectl get secret crusoe-secrets -n crusoe-system -o jsonpath="{.data.CRUSOE_ACCESS_KEY}" | base64 --decode)"
-              export CRUSOE_SECRET_ACCESS_KEY=$(kubectl get secret crusoe-secrets -n crusoe-system -o jsonpath="{.data.CRUSOE_SECRET_KEY}" | base64 --decode)"
-              export CRUSOE_PROJECT_ID=$(kubectl get secret crusoe-secrets -n crusoe-system -o jsonpath="{.data.CRUSOE_PROJECT_ID}" | base64 --decode)"
-              export CRUSOE_CLUSTER_ID=$(kubectl get secret crusoe-secrets -n crusoe-system -o jsonpath="{.data.CRUSOE_CLUSTER_ID}" | base64 --decode)"
               crusoe whoami
               export CRUSOE_MONITORING_TOKEN=$(crusoe monitoring tokens create | grep "monitor token:" | awk '{print $3}')
               kubectl create secret generic $SECRET_NAME \

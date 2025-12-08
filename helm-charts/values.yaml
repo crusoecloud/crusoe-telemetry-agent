@@ -144,7 +144,7 @@ vector:
 
   rbac:
     # rbac.create -- If true, create and use RBAC resources. Only valid for the "Agent" role.
-    create: false
+    create: true
 
   psp:
     # psp.create -- If true, create a [PodSecurityPolicy](https://kubernetes.io/docs/concepts/security/pod-security-policy/)
