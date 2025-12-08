@@ -110,12 +110,6 @@ class VectorConfigReloader:
         if not self.node_name:
             raise RuntimeError("NODE_NAME not set")
 
-        self.namespace = os.environ.get("POD_NAMESPACE", "default")
-        LOG.info(f"Watching pods in namespace: {self.namespace}")
-
-        self.namespace = os.environ.get("POD_NAMESPACE", "default")
-        LOG.info(f"Watching pods in namespace: {self.namespace}")
-
         self.running = True
         config.load_incluster_config()
         self.k8s_api_client = client.CoreV1Api()
