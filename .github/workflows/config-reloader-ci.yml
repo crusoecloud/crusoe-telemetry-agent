@@ -2,14 +2,14 @@ name: Config Reloader CI
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "managed-ai-metrics"]
     tags:
       - "v*"
     # BUT only run if changes occur under the vector-config-reloader/ path
     paths:
       - 'vector-config-reloader/**'
   pull_request:
-    branches: ["main"]
+    branches: ["main", "managed-ai-metrics"]
 
 jobs:
   test:
