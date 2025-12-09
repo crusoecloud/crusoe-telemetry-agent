@@ -216,6 +216,16 @@ vector:
         secretKeyRef:
           name: crusoe-secrets
           key: CRUSOE_PROJECT_ID
+    - name: CHART_VERSION
+      valueFrom:
+        configMapKeyRef:
+          name: crusoe-telemetry-agent-metadata
+          key: chart-version
+    - name: CHART_NAME
+      valueFrom:
+        configMapKeyRef:
+          name: crusoe-telemetry-agent-metadata
+          key: chart-name
 
   # envFrom -- Define environment variables from Secrets or ConfigMaps.
   envFrom:

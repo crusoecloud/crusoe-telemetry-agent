@@ -14,6 +14,10 @@ sources:
               - "ens*"
         scrape_interval_secs: 60
 
+    internal_metrics:
+        type: internal_metrics
+        scrape_interval_secs: 60
+
 transforms:
     add_update_labels:
         type: remap
@@ -24,11 +28,21 @@ transforms:
             .tags.vm_id = "${VM_ID}"
             .tags.crusoe_resource = "vm"
 
+    add_internal_labels:
+        type: remap
+        inputs:
+            - internal_metrics
+        source: |
+            .tags.vm_id = "${VM_ID}"
+            .tags.crusoe_resource = "vm"
+            .tags.agent_version = "${AGENT_VERSION}"
+
 sinks:
     cms_gateway:
         type: prometheus_remote_write
         inputs:
             - add_update_labels
+            - add_internal_labels
         endpoint: "${TELEMETRY_INGRESS_ENDPOINT}"
         auth:
             strategy: bearer
@@ -36,9 +50,9 @@ sinks:
         healthcheck:
             enabled: false
         request:
-            concurrency: none
-            rate_limit_duration_secs: 60
-            rate_limit_num: 10
+          concurrency: adaptive
+        batch:
+          max_bytes: 500000 # ~500KB
         compression: snappy
         tls:
             verify_certificate: true
