@@ -1,3 +1,5 @@
+providedMonitoringToken: false
+monitoringToken: ""
 namespace: crusoe-system
 environment: prod
 endpoints:
@@ -15,6 +17,8 @@ job:
 secrets:
   crusoeMonitoringToken: crusoe-monitoring-token
   existingSecret: crusoe-secrets
+  useProvidedMonitoringToken: false
+  monitoringToken: ""
 
 metricsExporter:
   defaultMetricsPath: /metrics

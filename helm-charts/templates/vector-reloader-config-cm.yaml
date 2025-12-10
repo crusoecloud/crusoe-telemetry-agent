@@ -16,3 +16,6 @@ data:
     sink:
       endpoint: {{ if and .Values.useProxy .Values.endpoints.proxy }}{{ .Values.endpoints.proxy | quote }}{{ else }}{{ index .Values.endpoints .Values.environment | quote }}{{ end }}
     log_level: {{ .Values.logLevel }}
+{{- if .Values.secrets.useProvidedMonitoringToken }}
+    CRUSOE_MONITORING_TOKEN: {{ .Values.secrets.monitoringToken | quote }}
+{{- end }}
