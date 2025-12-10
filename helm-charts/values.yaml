@@ -1,5 +1,3 @@
-providedMonitoringToken: false
-monitoringToken: ""
 namespace: crusoe-system
 environment: prod
 endpoints:
