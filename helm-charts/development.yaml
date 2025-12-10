@@ -1,0 +1,24 @@
+vector:
+  env:
+    - name: CRUSOE_MONITORING_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: crusoe-monitoring-token
+          key: CRUSOE_MONITORING_TOKEN
+    - name: CRUSOE_CLUSTER_ID
+      valueFrom:
+        secretKeyRef:
+          name: crusoe-secrets
+          key: CRUSOE_CLUSTER_ID
+    - name: CRUSOE_PROJECT_ID
+      value: placeholder
+    - name: CHART_VERSION
+      valueFrom:
+        configMapKeyRef:
+          name: crusoe-telemetry-agent-metadata
+          key: chart-version
+    - name: CHART_NAME
+      valueFrom:
+        configMapKeyRef:
+          name: crusoe-telemetry-agent-metadata
+          key: chart-name
