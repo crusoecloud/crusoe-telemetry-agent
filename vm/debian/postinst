@@ -22,6 +22,8 @@ INSTALLED_VERSION_FILE="$CRUSOE_TELEMETRY_AGENT_DIR/VERSION"
 DEFAULT_DCGM_EXPORTER_SERVICE_NAME="crusoe-dcgm-exporter.service"
 DCGM_EXPORTER_SERVICE_NAME="${DCGM_EXPORTER_SERVICE_NAME:-$DEFAULT_DCGM_EXPORTER_SERVICE_NAME}"
 DCGM_EXPORTER_SERVICE_PORT="${DCGM_EXPORTER_SERVICE_PORT:-9400}"
+REPLACE_DCGM_EXPORTER="${REPLACE_DCGM_EXPORTER:-false}"
+EXISTING_DCGM_EXPORTER_SERVICE="${EXISTING_DCGM_EXPORTER_SERVICE:-dcgm-exporter}"
 
 # dcgm-exporter docker image version map
 declare -A -r DCGM_EXPORTER_VERSION_MAP=(
@@ -43,8 +45,31 @@ command_exists() {
   command -v "$1" >/dev/null 2>&1
 }
 
+ensure_service_suffix() {
+  local service_name="$1"
+  if [[ "$service_name" != *.service ]]; then
+    echo "${service_name}.service"
+  else
+    echo "$service_name"
+  fi
+}
+
 service_exists() {
   systemctl cat "$1" >/dev/null 2>&1
+}
+
+stop_and_disable_service() {
+  local service_name="$1"
+  if service_exists "$service_name"; then
+    echo "Found $service_name."
+    systemctl stop "$service_name" || echo "Warning: Failed to stop $service_name"
+    systemctl disable "$service_name" || echo "Warning: Failed to disable $service_name"
+    echo "$service_name has been stopped and disabled."
+    return 0
+  else
+    echo "No $service_name found."
+    return 1
+  fi
 }
 
 error_exit() {
@@ -129,6 +154,10 @@ case "$1" in
   configure)
     status "Configuring Crusoe Telemetry Agent."
     
+    # Ensure service names have .service suffix
+    DCGM_EXPORTER_SERVICE_NAME=$(ensure_service_suffix "$DCGM_EXPORTER_SERVICE_NAME")
+    EXISTING_DCGM_EXPORTER_SERVICE=$(ensure_service_suffix "$EXISTING_DCGM_EXPORTER_SERVICE")
+    
     # Ensure docker is installed
     if ! command_exists docker; then
       error_exit "Docker is required but not installed. Please install docker.io or docker-ce package."
@@ -163,8 +192,14 @@ case "$1" in
       cp "$PACKAGE_DATA_DIR/config/vector_gpu_vm.yaml" "$CRUSOE_TELEMETRY_AGENT_DIR/vector.yaml"
       cp "$PACKAGE_DATA_DIR/docker/docker-compose-dcgm-exporter.yaml" "$CRUSOE_TELEMETRY_AGENT_DIR/"
       
-      # Install DCGM Exporter systemd service if it doesn't exist
-      if ! service_exists "$DCGM_EXPORTER_SERVICE_NAME"; then
+      # Handle replace-dcgm-exporter flag
+      if [[ "$REPLACE_DCGM_EXPORTER" == "true" ]]; then
+        status "Checking for pre-installed dcgm-exporter service: $EXISTING_DCGM_EXPORTER_SERVICE"
+        stop_and_disable_service "$EXISTING_DCGM_EXPORTER_SERVICE"
+      fi
+      
+      # Install DCGM Exporter systemd service if it doesn't exist or replace flag is set
+      if ! service_exists "$DCGM_EXPORTER_SERVICE_NAME" || [[ "$REPLACE_DCGM_EXPORTER" == "true" ]]; then
         status "Installing $DCGM_EXPORTER_SERVICE_NAME systemd unit."
         cp "$PACKAGE_DATA_DIR/systemctl/crusoe-dcgm-exporter.service" "$SYSTEMCTL_DIR/$DCGM_EXPORTER_SERVICE_NAME"
       else

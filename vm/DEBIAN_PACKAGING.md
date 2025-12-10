@@ -122,6 +122,16 @@ export CRUSOE_ENVIRONMENT="staging"
 sudo -E apt install ./crusoe-telemetry-agent_*.deb
 ```
 
+### Note for Slurm images
+
+If you have a pre-installed dcgm-exporter systemd service, use `REPLACE_DCGM_EXPORTER=true` to replace it with the Crusoe version for full metrics collection.
+Optional `EXISTING_DCGM_EXPORTER_SERVICE` defaults to `dcgm-exporter`:
+```bash
+export REPLACE_DCGM_EXPORTER=true
+export EXISTING_DCGM_EXPORTER_SERVICE="my-dcgm-exporter"
+sudo -E apt install ./crusoe-telemetry-agent_*.deb
+```
+
 ## Post-Installation
 
 ### Set Token (if not provided during install)
@@ -224,8 +234,10 @@ The package respects these environment variables during installation:
 
 - `CRUSOE_AUTH_TOKEN` - Monitoring token (82 chars)
 - `CRUSOE_ENVIRONMENT` - Environment: prod (default), staging, dev
-- `DCGM_EXPORTER_SERVICE_NAME` - Custom DCGM service name (default: crusoe-dcgm-exporter.service)
+- `DCGM_EXPORTER_SERVICE_NAME` - Custom DCGM service name (default: crusoe-dcgm-exporter)
 - `DCGM_EXPORTER_SERVICE_PORT` - Custom DCGM port (default: 9400)
+- `REPLACE_DCGM_EXPORTER` - Replace pre-installed dcgm-exporter: true or false (default: false)
+- `EXISTING_DCGM_EXPORTER_SERVICE` - Name of pre-installed dcgm-exporter service to replace (default: dcgm-exporter)
 
 ## Package Dependencies
 

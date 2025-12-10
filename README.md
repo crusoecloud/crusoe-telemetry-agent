@@ -16,6 +16,15 @@ chmod +x setup_crusoe_telemetry_agent.sh
 ```
 sudo ./setup_crusoe_telemetry_agent.sh
 ```
+
+**Note for Slurm images:** 
+If you have a pre-installed dcgm-exporter systemd service, use `--replace-dcgm-exporter` to replace it with the Crusoe version for full metrics collection. 
+Optional `SERVICE_NAME` defaults to `dcgm-exporter`:
+
+```
+sudo ./setup_crusoe_telemetry_agent.sh --replace-dcgm-exporter [SERVICE_NAME]
+```
+
 While installing the script will prompt user to enter crusoe monitoring token. Paste the token created in above step.
 Note: For enhanced security its a silent input, the token will not be displayed while pasting.
 ```
