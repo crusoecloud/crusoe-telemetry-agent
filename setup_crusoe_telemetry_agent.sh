@@ -209,6 +209,16 @@ if $HAS_NVIDIA_GPUS; then
   status "Download GPU Vector config."
   wget -q -O "$CRUSOE_TELEMETRY_AGENT_DIR/vector.yaml" "$GITHUB_RAW_BASE_URL/$REMOTE_VECTOR_CONFIG_GPU_VM" || error_exit "Failed to download $REMOTE_VECTOR_CONFIG_GPU_VM"
 
+  status "Checking for pre-installed dcgm-exporter service."
+  if service_exists "dcgm-exporter.service"; then
+    echo "Found pre-installed dcgm-exporter.service. Stopping and disabling it to avoid conflicts."
+    systemctl stop dcgm-exporter.service || echo "Warning: Failed to stop dcgm-exporter.service"
+    systemctl disable dcgm-exporter.service || echo "Warning: Failed to disable dcgm-exporter.service"
+    echo "Pre-installed dcgm-exporter.service has been stopped and disabled."
+  else
+    echo "No pre-installed dcgm-exporter.service found."
+  fi
+
   # Only download DCGM Exporter artifacts if the specified service does not already exist
   if service_exists "$DCGM_EXPORTER_SERVICE_NAME"; then
     echo "$DCGM_EXPORTER_SERVICE_NAME already exists. Skipping DCGM Exporter compose and service download."
