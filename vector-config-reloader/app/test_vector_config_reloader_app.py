@@ -228,7 +228,7 @@ def test_set_and_remove_data_api_gateway_metrics_scrape_config(monkeypatch):
 
     eps = ["http://10.2.0.1:9100/metrics", "http://10.2.0.2:9100/metrics"]
 
-    r.set_data_api_gateway_scrape_config(vector_cfg, eps)
+    r.set_data_api_gateway_scrape_config(vector_cfg, eps[:])
 
     # Sources created for each endpoint
     assert "pt_metrics_scrape" in vector_cfg["sources"]

@@ -250,13 +250,9 @@ class VectorConfigReloader:
             "enrich_pt_metrics", DATA_API_GATEWAY_METRICS_VECTOR_TRANSFORM
         )
 
-        existing_data_api_gateway_eps = sources.get("pt_metrics_scrape", {}).get(
-            "endpoints", []
-        )
-        data_api_gateway_eps.extend(existing_data_api_gateway_eps)
         sources["pt_metrics_scrape"] = {
             "type": "prometheus_scrape",
-            "endpoints": list(set(data_api_gateway_eps)),
+            "endpoints": data_api_gateway_eps,
             "scrape_interval_secs": 60,
             "scrape_timeout_secs": 50,
         }
@@ -399,9 +395,15 @@ class VectorConfigReloader:
                 LOG.info(
                     f"Adding DAG Pod {pod.metadata.name} is a relevant metrics exporter."
                 )
+                dag_eps = (
+                    current_vector_cfg.get("sources", {})
+                    .get("pt_metrics_scrape", {})
+                    .get("endpoints", [])
+                )
+                dag_eps.append(pod.status.pod_ip)
                 self.set_data_api_gateway_scrape_config(
                     current_vector_cfg,
-                    [self.get_data_api_gateway_scrape_endpoint(pod.status.pod_ip)],
+                    dag_eps,
                 )
             else:
                 LOG.info(f"Pod {pod.metadata.name} is not a relevant metrics exporter.")
