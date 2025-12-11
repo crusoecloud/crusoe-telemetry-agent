@@ -291,7 +291,7 @@ class VectorConfigReloader:
         )
         if pod_ip in endpoints:
             endpoints.remove(pod_ip)
-        if not endpoints:
+        if endpoints:
             self.set_data_api_gateway_scrape_config(vector_cfg, endpoints)
         else:
             vector_cfg.get("sources", {}).pop("pt_metrics_scrape", None)
