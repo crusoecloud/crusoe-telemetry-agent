@@ -2,14 +2,14 @@ name: Config Reloader CI
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "managed-ai-metrics"]
     tags:
       - "v*"
     # BUT only run if changes occur under the vector-config-reloader/ path
     paths:
       - 'vector-config-reloader/**'
   pull_request:
-    branches: ["main"]
+    branches: ["main", "managed-ai-metrics"]
 
 jobs:
   test:
@@ -60,9 +60,9 @@ jobs:
           images: ghcr.io/${{ github.repository }}/vector-config-reloader
           tags: |
             type=ref,event=branch
-            type=ref,event=pr
             type=ref,event=tag
             type=semver,pattern={{version}},prefix=
+            type=sha,format=short,prefix=
           flavor: |
             latest=auto
 
