@@ -30,6 +30,7 @@ CRUSOE_MONITORING_TOKEN_FILE="$CRUSOE_SECRETS_DIR/.monitoring-token"
 DEFAULT_DCGM_EXPORTER_SERVICE_NAME="crusoe-dcgm-exporter.service"
 DCGM_EXPORTER_SERVICE_NAME=$DEFAULT_DCGM_EXPORTER_SERVICE_NAME
 DCGM_EXPORTER_SERVICE_PORT="9400"
+REPLACE_DCGM_EXPORTER=false
 
 # Versioning and upgrade helpers (use vm/VERSION)
 REMOTE_VERSION_FILE="vm/VERSION"
@@ -53,10 +54,14 @@ declare -A -r TELEMETRY_INGRESS_MAP=(
 usage() {
   echo "Usage: $0 <command> [options]"
   echo "Commands: install | uninstall | refresh-token | upgrade | help"
-  echo "Options: --dcgm-exporter-service-name NAME --dcgm-exporter-service-port PORT"
+  echo "Options:"
+  echo "  --dcgm-exporter-service-name NAME    Specify custom DCGM exporter service name"
+  echo "  --dcgm-exporter-service-port PORT    Specify custom DCGM exporter port"
+  echo "  --replace-dcgm-exporter              Replace pre-installed dcgm-exporter. Recommended for version < 4 to collect all metrics."
   echo "Defaults: NAME=crusoe-dcgm-exporter.service, PORT=9400"
   echo "Examples:"
   echo "  $0 install --branch main"
+  echo "  $0 install --replace-dcgm-exporter"
   echo "  $0 uninstall"
   echo "  $0 refresh-token"
   echo "  $0 upgrade -b main"
@@ -98,6 +103,9 @@ parse_args() {
           error_exit "Missing value for $1"
         fi
         ;;
+      --replace-dcgm-exporter)
+        REPLACE_DCGM_EXPORTER=true; shift
+        ;;
       --help|-h)
         usage; exit 0;;
       *)
@@ -109,6 +117,21 @@ parse_args() {
 # Check if a systemd unit exists (anywhere on the systemd path)
 service_exists() {
   systemctl cat "$1" >/dev/null 2>&1
+}
+
+# Stop and disable a systemd service if it exists
+stop_and_disable_service() {
+  local service_name="$1"
+  if service_exists "$service_name"; then
+    echo "Found $service_name."
+    systemctl stop "$service_name" || echo "Warning: Failed to stop $service_name"
+    systemctl disable "$service_name" || echo "Warning: Failed to disable $service_name"
+    echo "$service_name has been stopped and disabled."
+    return 0
+  else
+    echo "No $service_name found."
+    return 1
+  fi
 }
 
 # --- Helper Functions ---
@@ -232,10 +255,13 @@ do_install() {
     status "Download GPU Vector config."
     wget -q -O "$CRUSOE_TELEMETRY_AGENT_DIR/vector.yaml" "$GITHUB_RAW_BASE_URL/$REMOTE_VECTOR_CONFIG_GPU_VM" || error_exit "Failed to download $REMOTE_VECTOR_CONFIG_GPU_VM"
 
-    # Only download DCGM Exporter artifacts if the specified service does not already exist
-    if service_exists "$DCGM_EXPORTER_SERVICE_NAME"; then
-      echo "$DCGM_EXPORTER_SERVICE_NAME already exists. Skipping DCGM Exporter compose and service download."
-    else
+    if $REPLACE_DCGM_EXPORTER; then
+      stop_and_disable_service "dcgm-exporter.service"
+      stop_and_disable_service "$DCGM_EXPORTER_SERVICE_NAME"
+    fi
+
+    # Download DCGM Exporter artifacts if service does not exist or replace flag is set
+    if ! service_exists "$DCGM_EXPORTER_SERVICE_NAME" || $REPLACE_DCGM_EXPORTER; then
       status "Download DCGM Exporter docker-compose file."
       wget -q -O "$CRUSOE_TELEMETRY_AGENT_DIR/docker-compose-dcgm-exporter.yaml" "$GITHUB_RAW_BASE_URL/$REMOTE_DOCKER_COMPOSE_DCGM_EXPORTER" || error_exit "Failed to download $REMOTE_DOCKER_COMPOSE_DCGM_EXPORTER"
 
