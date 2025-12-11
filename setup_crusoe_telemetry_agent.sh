@@ -236,10 +236,8 @@ if $HAS_NVIDIA_GPUS; then
     stop_and_disable_service "$DCGM_EXPORTER_SERVICE_NAME"
   fi
 
-  # Only download DCGM Exporter artifacts if the specified service does not already exist
-  if service_exists "$DCGM_EXPORTER_SERVICE_NAME"; then
-    echo "$DCGM_EXPORTER_SERVICE_NAME already exists. Skipping DCGM Exporter compose and service download."
-  else
+  # Download DCGM Exporter artifacts if service does not exist or replace flag is set
+  if ! service_exists "$DCGM_EXPORTER_SERVICE_NAME" || $REPLACE_DCGM_EXPORTER; then
     status "Download DCGM Exporter docker-compose file."
     wget -q -O "$CRUSOE_TELEMETRY_AGENT_DIR/docker-compose-dcgm-exporter.yaml" "$GITHUB_RAW_BASE_URL/$REMOTE_DOCKER_COMPOSE_DCGM_EXPORTER_UBUNTU_22" || error_exit "Failed to download $REMOTE_DOCKER_COMPOSE_DCGM_EXPORTER_UBUNTU_22"
 
