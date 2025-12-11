@@ -400,7 +400,9 @@ class VectorConfigReloader:
                     .get("pt_metrics_scrape", {})
                     .get("endpoints", [])
                 )
-                dag_eps.append(pod.status.pod_ip)
+                dag_ep = self.get_data_api_gateway_scrape_endpoint(pod.status.pod_ip)
+                if dag_ep not in dag_eps:
+                    dag_eps.append(dag_ep)
                 self.set_data_api_gateway_scrape_config(
                     current_vector_cfg,
                     dag_eps,
@@ -420,7 +422,8 @@ class VectorConfigReloader:
                     f"Removing DAG Pod {pod.metadata.name} is a relevant metrics exporter."
                 )
                 self.remove_data_api_gateway_scrape_config(
-                    current_vector_cfg, pod.status.pod_ip
+                    current_vector_cfg,
+                    self.get_data_api_gateway_scrape_endpoint(pod.status.pod_ip),
                 )
             else:
                 LOG.info(f"Pod {pod.metadata.name} is not a relevant metrics exporter.")
