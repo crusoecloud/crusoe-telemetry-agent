@@ -243,9 +243,9 @@ class VectorConfigReloader:
             ].append(DCGM_EXPORTER_SOURCE_NAME)
 
     def set_data_api_gateway_scrape_config(
-        self, vector_cfg: dict, data_api_gateway_ep: str
+        self, vector_cfg: dict, data_api_gateway_eps: list[str]
     ):
-        if data_api_gateway_ep is None:
+        if not data_api_gateway_eps:
             return
         sources = vector_cfg.setdefault("sources", {})
         transforms = vector_cfg.setdefault("transforms", {})
@@ -258,9 +258,13 @@ class VectorConfigReloader:
             "enrich_pt_metrics", DATA_API_GATEWAY_METRICS_VECTOR_TRANSFORM
         )
 
+        existing_data_api_gateway_eps = sources.get("pt_metrics_scrape", {}).get(
+            "endpoints", []
+        )
+        data_api_gateway_eps.extend(existing_data_api_gateway_eps)
         sources["pt_metrics_scrape"] = {
             "type": "prometheus_scrape",
-            "endpoints": [data_api_gateway_ep],
+            "endpoints": list(set(data_api_gateway_eps)),
             "scrape_interval_secs": 60,
             "scrape_timeout_secs": 50,
         }
@@ -287,11 +291,21 @@ class VectorConfigReloader:
             inputs
         )
 
-    def remove_data_api_gateway_scrape_config(self, vector_cfg: dict):
-        vector_cfg.get("sources", {}).pop("pt_metrics_scrape", None)
-        vector_cfg.get("transforms", {}).pop("enrich_pt_metrics", None)
-        vector_cfg.get("transforms", {}).pop("filter_pt_metrics:", None)
-        vector_cfg.get("sinks", {}).pop("cms_gateway_pt_metrics", None)
+    def remove_data_api_gateway_scrape_config(self, vector_cfg: dict, pod_ip):
+        endpoints = (
+            vector_cfg.get("sources", {})
+            .get("pt_metrics_scrape", {})
+            .get("endpoints", [])
+        )
+        if pod_ip in endpoints:
+            endpoints.remove(pod_ip)
+        if not endpoints:
+            self.set_data_api_gateway_scrape_config(vector_cfg, endpoints)
+        else:
+            vector_cfg.get("sources", {}).pop("pt_metrics_scrape", None)
+            vector_cfg.get("transforms", {}).pop("enrich_pt_metrics", None)
+            vector_cfg.get("transforms", {}).pop("filter_pt_metrics:", None)
+            vector_cfg.get("sinks", {}).pop("cms_gateway_pt_metrics", None)
 
     def set_custom_metrics_scrape_config(
         self, vector_cfg: dict, custom_metrics_eps: list
@@ -342,7 +356,7 @@ class VectorConfigReloader:
         base_cfg = YamlUtils.load_yaml_config(VECTOR_BASE_CONFIG_PATH)
 
         dcgm_exporter_ep = None
-        data_api_gateway_ep = None
+        data_api_gateway_eps = []
         custom_metrics_eps = []
         for pod in self.k8s_api_client.list_pod_for_all_namespaces(
             field_selector=f"spec.nodeName={self.node_name},status.phase=Running",
@@ -357,15 +371,15 @@ class VectorConfigReloader:
                 LOG.info(
                     f"Found DAG Pod {pod.metadata.name} is a relevant metrics exporter."
                 )
-                data_api_gateway_ep = self.get_data_api_gateway_scrape_endpoint(
-                    pod.status.pod_ip
+                data_api_gateway_eps.append(
+                    self.get_data_api_gateway_scrape_endpoint(pod.status.pod_ip)
                 )
             else:
                 LOG.info(f"Pod {pod.metadata.name} is not a relevant metrics exporter.")
 
         self.set_custom_metrics_scrape_config(base_cfg, custom_metrics_eps)
         self.set_dcgm_exporter_scrape_config(base_cfg, dcgm_exporter_ep)
-        self.set_data_api_gateway_scrape_config(base_cfg, data_api_gateway_ep)
+        self.set_data_api_gateway_scrape_config(base_cfg, data_api_gateway_eps)
 
         LOG.debug(f"Writing vector config {str(base_cfg)}")
 
@@ -401,12 +415,12 @@ class VectorConfigReloader:
                 )
                 self.set_data_api_gateway_scrape_config(
                     current_vector_cfg,
-                    self.get_data_api_gateway_scrape_endpoint(pod.status.pod_ip),
+                    [self.get_data_api_gateway_scrape_endpoint(pod.status.pod_ip)],
                 )
             else:
                 LOG.info(f"Pod {pod.metadata.name} is not a relevant metrics exporter.")
                 return
-        elif VectorConfigReloader.is_pod_terminating(pod):
+        elif event["type"] == "DELETED":
             if VectorConfigReloader.is_custom_metrics_pod(pod):
                 self.remove_custom_metrics_scrape_config(
                     current_vector_cfg, self.get_custom_metrics_endpoint_cfg(pod)
@@ -417,7 +431,9 @@ class VectorConfigReloader:
                 LOG.info(
                     f"Removing DAG Pod {pod.metadata.name} is a relevant metrics exporter."
                 )
-                self.remove_data_api_gateway_scrape_config(current_vector_cfg)
+                self.remove_data_api_gateway_scrape_config(
+                    current_vector_cfg, pod.status.pod_ip
+                )
             else:
                 LOG.info(f"Pod {pod.metadata.name} is not a relevant metrics exporter.")
                 return
