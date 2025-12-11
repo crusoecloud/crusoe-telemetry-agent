@@ -30,6 +30,7 @@ CRUSOE_MONITORING_TOKEN_FILE="$CRUSOE_SECRETS_DIR/.monitoring-token"
 DEFAULT_DCGM_EXPORTER_SERVICE_NAME="crusoe-dcgm-exporter.service"
 DCGM_EXPORTER_SERVICE_NAME=$DEFAULT_DCGM_EXPORTER_SERVICE_NAME
 DCGM_EXPORTER_SERVICE_PORT="9400"
+REPLACE_DCGM_EXPORTER=false
 
 # Versioning and upgrade helpers (use vm/VERSION)
 REMOTE_VERSION_FILE="vm/VERSION"
@@ -53,10 +54,14 @@ declare -A -r TELEMETRY_INGRESS_MAP=(
 usage() {
   echo "Usage: $0 <command> [options]"
   echo "Commands: install | uninstall | refresh-token | upgrade | help"
-  echo "Options: --dcgm-exporter-service-name NAME --dcgm-exporter-service-port PORT"
+  echo "Options:"
+  echo "  --dcgm-exporter-service-name NAME    Specify custom DCGM exporter service name"
+  echo "  --dcgm-exporter-service-port PORT    Specify custom DCGM exporter port"
+  echo "  --replace-dcgm-exporter              Replace pre-installed dcgm-exporter. Recommended for version < 4 to collect all metrics."
   echo "Defaults: NAME=crusoe-dcgm-exporter.service, PORT=9400"
   echo "Examples:"
   echo "  $0 install --branch main"
+  echo "  $0 install --replace-dcgm-exporter"
   echo "  $0 uninstall"
   echo "  $0 refresh-token"
   echo "  $0 upgrade -b main"
@@ -97,6 +102,9 @@ parse_args() {
         else
           error_exit "Missing value for $1"
         fi
+        ;;
+      --replace-dcgm-exporter)
+        REPLACE_DCGM_EXPORTER=true; shift
         ;;
       --help|-h)
         usage; exit 0;;
@@ -231,6 +239,18 @@ do_install() {
 
     status "Download GPU Vector config."
     wget -q -O "$CRUSOE_TELEMETRY_AGENT_DIR/vector.yaml" "$GITHUB_RAW_BASE_URL/$REMOTE_VECTOR_CONFIG_GPU_VM" || error_exit "Failed to download $REMOTE_VECTOR_CONFIG_GPU_VM"
+
+    if $REPLACE_DCGM_EXPORTER; then
+      status "Checking for pre-installed dcgm-exporter service."
+      if service_exists "dcgm-exporter.service"; then
+        echo "Found pre-installed dcgm-exporter.service."
+        systemctl stop dcgm-exporter.service || echo "Warning: Failed to stop dcgm-exporter.service"
+        systemctl disable dcgm-exporter.service || echo "Warning: Failed to disable dcgm-exporter.service"
+        echo "Pre-installed dcgm-exporter.service has been stopped and disabled."
+      else
+        echo "No pre-installed dcgm-exporter.service found."
+      fi
+    fi
 
     # Only download DCGM Exporter artifacts if the specified service does not already exist
     if service_exists "$DCGM_EXPORTER_SERVICE_NAME"; then
