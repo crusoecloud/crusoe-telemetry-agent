@@ -150,14 +150,6 @@ class VectorConfigReloader:
         return re.sub(r"[^a-zA-Z0-9_]", "_", name)
 
     @staticmethod
-    def is_pod_active(pod):
-        return pod.status.phase == "Running"
-
-    @staticmethod
-    def is_pod_terminating(pod):
-        return pod.status.phase == "Terminating"
-
-    @staticmethod
     def is_custom_metrics_pod(pod):
         annotations = pod.metadata.annotations or {}
         return (
@@ -388,18 +380,12 @@ class VectorConfigReloader:
 
     def handle_pod_event(self, event):
         pod = event["object"]
-        if not (
-            VectorConfigReloader.is_pod_active(pod)
-            or VectorConfigReloader.is_pod_terminating(pod)
-        ):
-            LOG.info(
-                f"Pod {pod.metadata.name} state is neither running nor terminating."
-            )
-            return
-
+        event_type = event["type"]
+        LOG.info(
+            f"Received the event {event_type} for pod {pod.metadata.name} with status {pod.status.phase}"
+        )
         current_vector_cfg = YamlUtils.load_yaml_config(VECTOR_CONFIG_PATH)
-
-        if VectorConfigReloader.is_pod_active(pod):
+        if pod.status.phase == "Running":
             if VectorConfigReloader.is_custom_metrics_pod(pod):
                 self.set_custom_metrics_scrape_config(
                     current_vector_cfg, [self.get_custom_metrics_endpoint_cfg(pod)]
@@ -437,6 +423,9 @@ class VectorConfigReloader:
             else:
                 LOG.info(f"Pod {pod.metadata.name} is not a relevant metrics exporter.")
                 return
+        else:
+            LOG.info(f"Pod {pod.metadata.name} is not a relevant metrics exporter.")
+            return
 
         LOG.debug(f"Writing vector config: {str(current_vector_cfg)}")
         YamlUtils.save_yaml(VECTOR_CONFIG_PATH, current_vector_cfg)
