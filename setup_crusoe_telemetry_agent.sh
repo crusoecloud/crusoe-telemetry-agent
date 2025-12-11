@@ -77,6 +77,21 @@ service_exists() {
   systemctl cat "$1" >/dev/null 2>&1
 }
 
+# Stop and disable a systemd service if it exists
+stop_and_disable_service() {
+  local service_name="$1"
+  if service_exists "$service_name"; then
+    echo "Found $service_name."
+    systemctl stop "$service_name" || echo "Warning: Failed to stop $service_name"
+    systemctl disable "$service_name" || echo "Warning: Failed to disable $service_name"
+    echo "$service_name has been stopped and disabled."
+    return 0
+  else
+    echo "No $service_name found."
+    return 1
+  fi
+}
+
 # --- Helper Functions ---
 
 command_exists() {
@@ -217,14 +232,8 @@ if $HAS_NVIDIA_GPUS; then
 
   if $REPLACE_DCGM_EXPORTER; then
     status "Checking for pre-installed dcgm-exporter service."
-    if service_exists "dcgm-exporter.service"; then
-      echo "Found pre-installed dcgm-exporter.service."
-      systemctl stop dcgm-exporter.service || echo "Warning: Failed to stop dcgm-exporter.service"
-      systemctl disable dcgm-exporter.service || echo "Warning: Failed to disable dcgm-exporter.service"
-      echo "Pre-installed dcgm-exporter.service has been stopped and disabled."
-    else
-      echo "No pre-installed dcgm-exporter.service found."
-    fi
+    stop_and_disable_service "dcgm-exporter.service"
+    stop_and_disable_service "$DCGM_EXPORTER_SERVICE_NAME"
   fi
 
   # Only download DCGM Exporter artifacts if the specified service does not already exist
