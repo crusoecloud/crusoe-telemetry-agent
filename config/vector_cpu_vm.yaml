@@ -6,16 +6,17 @@ sources:
             - disk
             - memory
             - network
-            - processes
+            - process
         network:
           devices:
             excludes:
               - "lo*"
             includes:
               - "ens*"
-        processes:
-          includes:
-            - "vector"
+        process:
+          processes:
+            includes:
+              - "vector"
         scrape_interval_secs: 60
 
     internal_metrics:
