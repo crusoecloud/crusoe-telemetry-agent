@@ -17,7 +17,7 @@ data:
       endpoint: {{ index .Values.endpoints .Values.environment | quote }}
       proxy:
         enabled: {{ .Values.proxy.enabled }}
-        endpoint: {{ .Values.proxy.endpoint | quote }}
+        url: {{ .Values.proxy.url | quote }}
         port: {{ .Values.proxy.port }}
     log_level: {{ .Values.logLevel }}
 {{- if .Values.secrets.useProvidedMonitoringToken }}

@@ -8,7 +8,7 @@ endpoints:
 
 proxy:
   enabled: false
-  endpoint: "internal.cms-monitoring.crusoecloud.com"
+  url: "internal.cms-monitoring.crusoecloud.com"
   port: 3128
 
 job:
