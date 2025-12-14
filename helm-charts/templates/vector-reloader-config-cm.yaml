@@ -14,7 +14,7 @@ data:
       path: {{ .Values.metricsExporter.defaultMetricsPath }}
       scrape_interval: {{ .Values.metricsExporter.defaultScrapeInterval }}
     sink:
-      endpoint: {{ if and .Values.useProxy .Values.endpoints.proxy }}{{ .Values.endpoints.proxy | quote }}{{ else }}{{ index .Values.endpoints .Values.environment | quote }}{{ end }}
+      endpoint: {{ index .Values.endpoints .Values.environment | quote }}
     log_level: {{ .Values.logLevel }}
 {{- if .Values.secrets.useProvidedMonitoringToken }}
     CRUSOE_MONITORING_TOKEN: {{ .Values.secrets.monitoringToken | quote }}
