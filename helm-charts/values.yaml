@@ -13,7 +13,7 @@ proxy:
 
 job:
   name: crusoe-monitoring-token-job
-  image: ghcr.io/crusoecloud/crusoe-telemetry-agent/token-job:pr-75
+  image: ghcr.io/crusoecloud/crusoe-telemetry-agent/token-job:pr-81
   ttlSecondsAfterFinished: 300
 secrets:
   crusoeMonitoringToken: crusoe-monitoring-token
@@ -502,7 +502,7 @@ vector:
   # This also supports template content, which will eventually be converted to yaml.
   extraContainers:
     - name: vector-config-reloader
-      image: ghcr.io/crusoecloud/crusoe-telemetry-agent/vector-config-reloader:pr-75
+      image: ghcr.io/crusoecloud/crusoe-telemetry-agent/vector-config-reloader:pr-81
       env:
         - name: NODE_NAME
           valueFrom:
