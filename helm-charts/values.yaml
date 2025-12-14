@@ -6,7 +6,10 @@ endpoints:
   dev: "https://cms-monitoring.crusoecloud.xyz/ingest"
   proxy: "https://cms-monitoring.crusoecloud.internal"
 
-useProxy: false
+proxy:
+  enabled: false
+  endpoint: "internal.cms-monitoring.crusoecloud.com"
+  port: 3128
 
 job:
   name: crusoe-monitoring-token-job
