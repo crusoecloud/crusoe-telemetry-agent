@@ -77,6 +77,7 @@ class VectorConfigReloader:
         self.amd_manager = AmdExporterManager(reloader_cfg.get("amd_metrics", {}))
         self.default_custom_metrics_config = reloader_cfg["custom_metrics"]
         self.sink_endpoint = reloader_cfg["sink"]["endpoint"]
+        self.sink_proxy_cfg = reloader_cfg["sink"].get("proxy", {}) or {}
         self.custom_metrics_sink_config = {
             "type": "prometheus_remote_write",
             "inputs": [CUSTOM_METRICS_VECTOR_TRANSFORM_NAME],
@@ -86,6 +87,10 @@ class VectorConfigReloader:
             "compression": "snappy",
             "tls": {"verify_certificate": True, "verify_hostname": True},
         }
+
+        # set proxy if enabled
+        if self.sink_proxy_cfg.get("enabled"):
+            self.custom_metrics_sink_config["proxy"] = self.sink_proxy_cfg
 
         LOG.setLevel(reloader_cfg["log_level"])
 
@@ -206,6 +211,10 @@ class VectorConfigReloader:
 
         # set endpoint as per env
         base_cfg["sinks"]["cms_gateway_node_metrics"]["endpoint"] = self.sink_endpoint
+
+        # set proxy config if enabled in reloader config
+        if self.sink_proxy_cfg.get("enabled"):
+            base_cfg["sinks"]["cms_gateway_node_metrics"]["proxy"] = self.sink_proxy_cfg
 
         LOG.debug(f"Writing vector config {str(base_cfg)}")
         # always update the node metrics transform source to handle LiteralStr issue
