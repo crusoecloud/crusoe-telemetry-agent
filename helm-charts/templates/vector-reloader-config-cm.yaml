@@ -22,6 +22,3 @@ data:
         https: "http://{{ .Values.proxy.url }}:{{ .Values.proxy.port }}"
 {{- end }}
     log_level: {{ .Values.logLevel }}
-{{- if .Values.secrets.useProvidedMonitoringToken }}
-    CRUSOE_MONITORING_TOKEN: {{ .Values.secrets.monitoringToken | quote }}
-{{- end }}

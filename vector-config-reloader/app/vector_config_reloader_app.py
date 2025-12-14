@@ -82,7 +82,7 @@ class VectorConfigReloader:
             "type": "prometheus_remote_write",
             "inputs": [CUSTOM_METRICS_VECTOR_TRANSFORM_NAME],
             "endpoint": self.sink_endpoint,
-            "auth": {"strategy": "bearer", "token": reloader_cfg.get("CRUSOE_MONITORING_TOKEN", "${CRUSOE_MONITORING_TOKEN}")},
+            "auth": {"strategy": "bearer", "token": "${CRUSOE_MONITORING_TOKEN}"},
             "healthcheck": {"enabled": False},
             "compression": "snappy",
             "tls": {"verify_certificate": True, "verify_hostname": True},
