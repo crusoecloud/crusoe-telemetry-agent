@@ -278,7 +278,7 @@ class VectorConfigReloader:
         except client.ApiException as e:
             LOG.error(f"k8s event watcher error: {e}")
 
-        LOG.info("Exiting config reloader.")
+        LOG.info("Exiting config reloader. ")
 
 if __name__ == "__main__":
     VectorConfigReloader().execute()
