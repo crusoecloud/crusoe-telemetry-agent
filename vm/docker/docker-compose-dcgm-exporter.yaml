@@ -6,6 +6,8 @@ services:
     cap_add: [SYS_ADMIN]
     volumes:
       - /etc/crusoe/telemetry_agent/dcp-metrics-included.csv:/etc/dcgm-exporter/dcp-metrics-included.csv:ro
+    env_file:
+      - ./.env
     command: -f /etc/dcgm-exporter/dcp-metrics-included.csv -r localhost:5555
     privileged: true
     deploy:
