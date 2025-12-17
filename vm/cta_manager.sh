@@ -279,11 +279,20 @@ do_install() {
   fi
 
   status "Creating .env file with VM_ID and DCGM_EXPORTER_PORT."
+
+  # Read agent version from VERSION file
+  AGENT_VERSION=$(tr -d '[:space:]' < "$PACKAGE_DATA_DIR/VERSION")
+
+  # Create .env file
+  status "Creating .env file with VM_ID and DCGM_EXPORTER_PORT."
+  cat <<EOF > "$ENV_FILE"
+
   cat <<EOF > "$ENV_FILE"
 VM_ID='${CRUSOE_VM_ID}'
 DCGM_EXPORTER_PORT='${DCGM_EXPORTER_SERVICE_PORT}'
 DCGM_EXPORTER_IMAGE_VERSION='${DCGM_EXPORTER_VERSION_MAP[$UBUNTU_OS_VERSION]}'
 TELEMETRY_INGRESS_ENDPOINT='${TELEMETRY_INGRESS_MAP[$ENVIRONMENT]}'
+AGENT_VERSION='${AGENT_VERSION}'
 EOF
   echo ".env file created at $ENV_FILE"
 
