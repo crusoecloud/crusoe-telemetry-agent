@@ -278,12 +278,21 @@ do_install() {
     write_token_to_secrets "$CRUSOE_AUTH_TOKEN"
   fi
 
+  # Download version file first so we can read it
+  status "Download VERSION file."
+  wget -q -O "$INSTALLED_VERSION_FILE" "$GITHUB_RAW_BASE_URL/$REMOTE_VERSION_FILE" || error_exit "Failed to download $GITHUB_RAW_BASE_URL/$REMOTE_VERSION_FILE"
+
+  # Read agent version from VERSION file
+  AGENT_VERSION=$(tr -d '[:space:]' < "$INSTALLED_VERSION_FILE")
+
+  # Create .env file
   status "Creating .env file with VM_ID and DCGM_EXPORTER_PORT."
   cat <<EOF > "$ENV_FILE"
 VM_ID='${CRUSOE_VM_ID}'
 DCGM_EXPORTER_PORT='${DCGM_EXPORTER_SERVICE_PORT}'
 DCGM_EXPORTER_IMAGE_VERSION='${DCGM_EXPORTER_VERSION_MAP[$UBUNTU_OS_VERSION]}'
 TELEMETRY_INGRESS_ENDPOINT='${TELEMETRY_INGRESS_MAP[$ENVIRONMENT]}'
+AGENT_VERSION='${AGENT_VERSION}'
 EOF
   echo ".env file created at $ENV_FILE"
 
@@ -297,10 +306,6 @@ EOF
   systemctl enable crusoe-telemetry-agent.service
   echo "systemctl start crusoe-telemetry-agent.service"
   systemctl start crusoe-telemetry-agent.service
-
-  # Download version file
-  status "Download VERSION file."
-  wget -q -O "$INSTALLED_VERSION_FILE" "$GITHUB_RAW_BASE_URL/$REMOTE_VERSION_FILE" || error_exit "Failed to download $GITHUB_RAW_BASE_URL/$REMOTE_VERSION_FILE"
 
   status "Setup Complete!"
   if $HAS_NVIDIA_GPUS; then
