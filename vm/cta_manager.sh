@@ -189,7 +189,9 @@ check_root() {
 write_token_to_secrets() {
   local token="$1"
   mkdir -p "$CRUSOE_SECRETS_DIR" || true
-  echo "CRUSOE_AUTH_TOKEN=${token}" > "$CRUSOE_MONITORING_TOKEN_FILE"
+  # Escape dollar signs to prevent variable expansion in docker-compose/vector
+  local escaped_token="${token//\$/\$\$}"
+  echo "CRUSOE_AUTH_TOKEN=${escaped_token}" > "$CRUSOE_MONITORING_TOKEN_FILE"
   chmod 600 "$CRUSOE_MONITORING_TOKEN_FILE" || true
 }
 
@@ -288,14 +290,6 @@ do_install() {
       status "Download $DCGM_EXPORTER_SERVICE_NAME systemd unit."
       wget -q -O "$SYSTEMCTL_DIR/$DCGM_EXPORTER_SERVICE_NAME" "$GITHUB_RAW_BASE_URL/$REMOTE_CRUSOE_DCGM_EXPORTER_SERVICE" || error_exit "Failed to download $REMOTE_CRUSOE_DCGM_EXPORTER_SERVICE"
     fi
-
-    status "Enable and start systemd services for $DCGM_EXPORTER_SERVICE_NAME."
-    echo "systemctl daemon-reload"
-    systemctl daemon-reload
-    echo "systemctl enable $DCGM_EXPORTER_SERVICE_NAME"
-    systemctl enable "$DCGM_EXPORTER_SERVICE_NAME"
-    echo "systemctl start $DCGM_EXPORTER_SERVICE_NAME"
-    systemctl start "$DCGM_EXPORTER_SERVICE_NAME"
   else
      status "Copy CPU Vector config."
      wget -q -O "$CRUSOE_TELEMETRY_AGENT_DIR/vector.yaml" "$GITHUB_RAW_BASE_URL/$REMOTE_VECTOR_CONFIG_CPU_VM" || error_exit "Failed to download $REMOTE_VECTOR_CONFIG_CPU_VM"
@@ -341,6 +335,17 @@ TELEMETRY_INGRESS_ENDPOINT='${TELEMETRY_INGRESS_MAP[$ENVIRONMENT]}'
 AGENT_VERSION='${AGENT_VERSION}'
 EOF
   echo ".env file created at $ENV_FILE"
+
+  # Start DCGM exporter after .env is ready
+  if $HAS_NVIDIA_GPUS; then
+    status "Enable and start systemd services for $DCGM_EXPORTER_SERVICE_NAME."
+    echo "systemctl daemon-reload"
+    systemctl daemon-reload
+    echo "systemctl enable $DCGM_EXPORTER_SERVICE_NAME"
+    systemctl enable "$DCGM_EXPORTER_SERVICE_NAME"
+    echo "systemctl start $DCGM_EXPORTER_SERVICE_NAME"
+    systemctl start "$DCGM_EXPORTER_SERVICE_NAME"
+  fi
 
   status "Download crusoe-telemetry-agent.service."
   wget -q -O "$SYSTEMCTL_DIR/crusoe-telemetry-agent.service" "$GITHUB_RAW_BASE_URL/$REMOTE_CRUSOE_TELEMETRY_SERVICE" || error_exit "Failed to download $REMOTE_CRUSOE_TELEMETRY_SERVICE"
