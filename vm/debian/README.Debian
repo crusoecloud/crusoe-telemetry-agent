@@ -41,6 +41,17 @@ On GPU VMs, the package will automatically:
 - Install and start the DCGM Exporter service
 - Configure GPU-specific metrics collection
 
+For Slurm Images with Pre-installed DCGM Exporter
+--------------------------------------------------
+
+If you have a pre-installed dcgm-exporter systemd service, you can replace
+it with the Crusoe version for full metrics collection.
+Optional `EXISTING_DCGM_EXPORTER_SERVICE` defaults to `dcgm-exporter`:
+
+   export REPLACE_DCGM_EXPORTER=true
+   export EXISTING_DCGM_EXPORTER_SERVICE="my-dcgm-exporter"
+   sudo -E apt install ./crusoe-telemetry-agent_*.deb
+
 Services
 --------
 
