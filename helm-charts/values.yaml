@@ -5,13 +5,20 @@ endpoints:
   staging: "https://cms-monitoring.crusoecloud.site/ingest"
   dev: "https://cms-monitoring.crusoecloud.xyz/ingest"
 
+proxy:
+  enabled: false
+  url: "internal.cms-monitoring.crusoecloud.com"
+  port: 3128
+
 job:
   name: crusoe-monitoring-token-job
-  image: ubuntu:22.04
+  image: ghcr.io/crusoecloud/crusoe-telemetry-agent/token-job:pr-84
   ttlSecondsAfterFinished: 300
 secrets:
   crusoeMonitoringToken: crusoe-monitoring-token
   existingSecret: crusoe-secrets
+  useProvidedMonitoringToken: false
+  monitoringToken: ""
 
 metricsExporter:
   defaultMetricsPath: /metrics
@@ -494,7 +501,7 @@ vector:
   # This also supports template content, which will eventually be converted to yaml.
   extraContainers:
     - name: vector-config-reloader
-      image: ghcr.io/crusoecloud/crusoe-telemetry-agent/vector-config-reloader:v0.1.5
+      image: ghcr.io/crusoecloud/crusoe-telemetry-agent/vector-config-reloader:pr-84
       env:
         - name: NODE_NAME
           valueFrom:
